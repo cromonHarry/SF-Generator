@@ -45,16 +45,8 @@ This is a **Streamlit-based application** that helps users generate a **25-year 
 ## 🧠 Models Used
 
 - **OpenAI GPT-4o**
-- **AP model**: A sociocultural model with 6 objects and 12 paths, used to simulate plausible future worlds
-- **S-Curve model**: Forecasts technological evolution over time
+- **OPENAI GPT-Image-1**
 
-## 📁 File Structure
-
-```
-├── app.py               # Streamlit application
-├── requirements.txt     # Python dependencies
-├── README.md            # You're here!
-```
 
 ## 🧪 Example Use Case
 
