@@ -7,22 +7,15 @@ from PIL import Image
 import json
 import io
 import os
-    
+import time
+
 # Initialize OpenAI client with your API key
 client = OpenAI()
-
-# Pydantic models
-class Timeline(BaseModel):
-    year: int
-    description: str
-
-class Evolution(BaseModel):
-    steps: list[Timeline]
 
 # Title and description
 st.title("🚀 Near Future SF Generator")
 st.markdown("""
-This application generates a science fiction story based on the technology product you're interested in.
+This application generates a 3-stage evolutionary timeline and science fiction story based on the technology product you're interested in.
 Please upload a product image and fill in the relevant information.
 """)
 
@@ -31,23 +24,23 @@ with st.sidebar:
     st.header("Input Information")
     
     # Product input
-    product = st.text_input("Product Name", placeholder="e.g., Smartphone")
+    product = st.text_input("Tell me your interest product.", placeholder="e.g., Smartphone")
     
     # User experience input
-    user_experience = st.text_area("Your Experience", 
-                                   placeholder="Describe the positive feelings when using this product...",
+    user_experience = st.text_area("Why do you think this product is good?", 
+                                   placeholder="e.g., It allows me talk with my parents from anywhere in the world.",
                                    height=100)
     
     # Avant-garde issue input
-    avant_garde_issue = st.text_area("Potential Issue", 
-                                     placeholder="Describe potential problems this product might bring...",
+    avant_garde_issue = st.text_area("Is there any problem that you think is not good enough?", 
+                                     placeholder="e.g., People spend too much time on it.",
                                      height=100)
     
     # Image upload
     uploaded_file = st.file_uploader("Upload Product Image", type=['png', 'jpg', 'jpeg'])
     
     # Generate button
-    generate_button = st.button("🔮 Generate Timeline and Story", type="primary")
+    generate_button = st.button("🔮 Generate Story", type="primary")
 
 # Helper functions
 def resize_image(img):
@@ -65,71 +58,8 @@ def encode_image(img):
     img.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-def s_curve_description(product):
-    return f"""We all know {product}. Analyze the technological evolution path of it from now, which is 2025 to 2050.
-Please base the analysis on the S-curve model and predict the key developments at the following points in step:
-1. 2030 (5 years later than current time)
-2. 2035
-3. 2040
-4. 2045
-5. 2050
-For each step, provide a description of this technology, including the key developments, breakthroughs, and potential challenges."""
-
-def build_background(product, user_experience, avant_garde_issue):
-    return f"""
-Here are some known information about the objects and paths that are related to the AP model: the product is {product}, which is also shown in the image, the user experience is {user_experience}, the avant-garde issue is {avant_garde_issue}.
-Please analyze and generate the other objects and paths that are related to the AP model. Only output the objects and paths.
-"""
-
-def update_background(product, background, description):
-    return f"""
-Here is the evolution step of {product} and the related information based on AP model:
-{background}
-Now 5 years has passed, and the {product} has evolved. The new description is {description}.
-Please generate the new background of {product} based on AP model. Imagine if problems are solved? How do them solved? Are there any new problems are realized? Only output the objects and paths.
-"""
-
-def generate_story(background, product):
-    return f"""
-Now you need to generate an interesting short science fiction. The topic is about {product}.
-Here is the background settings based on AP model:
-{background}
-Your story should be no more than 500 words.
-"""
-
-# Main content area
-if generate_button and product and user_experience and avant_garde_issue and uploaded_file:
-    
-    # Save uploaded image temporarily
-    with st.spinner("Processing..."):
-        # Read uploaded file
-        image = Image.open(uploaded_file)
-        
-        # Resize image
-        resized_image = resize_image(image)
-        
-        # Convert to base64
-        img_base64 = encode_image(resized_image)
-        
-        # Display input image
-        st.subheader("Input Image")
-        st.image(resized_image, caption=f"{product} - Current State", use_container_width=True)
-        
-        # Generate evolution timeline using S-curve model
-        with st.spinner("Analyzing technology evolution path..."):
-            prompt = s_curve_description(product)
-            completion = client.beta.chat.completions.parse(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are an expert in technology forecasting and futurism, specializing in analyzing technology evolution paths."},
-                    {"role": "user", "content": prompt}
-                ],
-                response_format=Evolution,
-            )
-            steps = completion.choices[0].message.parsed.steps
-        
-        # Generate AP model background for each timeline step
-        SYSTEM_PROMPT = f"""You are an expert of science fictionist. You analyze the society based on the Archaeological Prototyping(AP) model. Here is the introduction about this model:
+# Prompts from your code
+SYSTEM_PROMPT = """You are an expert of science fictionist. You analyze the society based on the Archaeological Prototyping(AP) model. Here is the introduction about this model:
 AP is a sociocultural model composed of 18 items (6 objects and 12 paths). In essence, it's a model that divides society and culture into these 18 elements and logically depicts their connections.
 The 6 objects are:
 1. Avant-garde social issues: Social issues caused by paradigms of technology and resources, and the everyday spaces and user experiences shaped by them, are made visible through art (social critisim).
@@ -152,105 +82,296 @@ The 12 paths are:
 10. Paradigm: Something that serves as a dominant technology or resource of an era and has influence on the next generation. Converting technology and resources into avant-garde issues.
 11. Business Ecosystem: A network formed by stakeholders involved in products and services that constitute and maintain everyday spaces and user experiences. Converting everyday spaces and user experiences into systems.
 12. Art (Social Critique): A person's belief that views problems that people are unaware of from a subjective/intrinsic perspective. It has the role of feeling discomfort with everyday spaces and user experiences and presenting problems. Converting everyday spaces and user experiences into avant-garde issues."""
-        
-        history = []
-        
-        # Initial background generation
-        with st.spinner("Generating initial background..."):
-            user_prompt = build_background(product, user_experience, avant_garde_issue)
-            completion = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": user_prompt},
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{img_base64}",
-                                }
-                            },
-                        ],
-                    }
-                ]
-            )
+
+def generate_description(product):
+    return f"""
+Here is the image of {product}. Please generate a description of this product, such as appearance or function. Less than 100 words.
+"""
+
+def build_background(product, user_experience, avant_garde_issue):
+    return f"""
+Here are some known information about the objects and paths that are related to the AP model: the product is {product}, which is also shown in the image, the user experience is {user_experience}, the avant-garde issue is {avant_garde_issue}.
+Please analyze and generate the other objects and paths that are related to the AP model. Only output the objects and paths.
+"""
+
+def update_description(product, description, background, step):
+    return f"""
+This is {product}. Analyze the technological evolution path of it.
+Please base the analysis on the S-curve model and predict the key developments at the following steps:
+
+Step 1: Ferment period: In this step, technological development progresses steadily, focusing mainly on solving existing problems and improving current functionalities.
+Step 2: Take-off period: In this step, technology enters a period of rapid development. People propose various innovative ideas, which are eventually combined to form entirely new forms of technology.
+Step 3: Maturity period: In this step, technological development slows down again. The new forms of technology bring new problems, which people continue to address while refining the current technologies.
+
+Now the product is in step {step}. Here is the current description of it: {description}.
+Also, here is the background of it based on AP model:
+{background}
+Now please generate the new description of the product at the next step, such as appearance or function. Less than 100 words.
+"""
+
+def update_background(product, background, description):
+    return f"""
+Here is the evolution step of {product} and the related information based on AP model:
+{background}
+Now move to next step, and the {product} has evolved. The new description of it is {description}.
+Please generate the new background of {product} based on AP model. Imagine if problems are solved? How do them solved? Are there any new problems are realized? Only output the objects and paths.
+"""
+
+def generate_story(product, bg_history, description_history):
+    backgrounds = "\n".join([f"Step {item['step']}: {item['background']}" for item in bg_history])
+    descriptions = "\n".join([f"Step {item['step']}: {item['description']}" for item in description_history])
+    
+    return f"""
+Now you need to generate an interesting short science fiction. The topic is about {product}.
+Here is the description of this product in 3 development steps:
+{descriptions}
+Here is the background settings based on AP model in 3 development steps:
+{backgrounds}
+Your story should be no more than 500 words.
+"""
+
+# Main content area
+if generate_button and product and user_experience and avant_garde_issue and uploaded_file:
+    # Initialize containers for each step
+    initial_container = st.container()
+    step1_container = st.container()
+    step2_container = st.container()
+    step3_container = st.container()
+    final_container = st.container()
+    
+    with initial_container:
+        # Save uploaded image temporarily
+        with st.spinner("Processing image..."):
+            # Read uploaded file
+            image = Image.open(uploaded_file)
             
-            temp = {
-                "year": 2025,
-                "background": completion.choices[0].message.content
-            }
-            history.append(temp)
-        
-        # Generate backgrounds for each timeline step
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        for i, step in enumerate(steps):
-            progress = (i + 1) / len(steps)
-            progress_bar.progress(progress)
-            status_text.text(f"Generating {step.year} background...")
+            # Resize image
+            resized_image = resize_image(image)
             
-            user_prompt = update_background(product, history[i]['background'], step.description)
-            completion = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt}
-                ]
-            )
+            # Convert to base64
+            img_base64 = encode_image(resized_image)
             
-            temp = {
-                "year": step.year,
-                "background": completion.choices[0].message.content
-            }
-            history.append(temp)
+            # Display input image
+            st.subheader("Input Image")
+            st.image(resized_image, caption=f"{product} - Current State", use_container_width=True)
+    
+    # Create placeholder for progress
+    progress_placeholder = st.empty()
+    progress_bar = progress_placeholder.progress(0)
+    status_text = st.empty()
+    
+    # Storage for history
+    bg_history = []
+    description_history = []
+    
+    with step1_container:
+        # Step 1: Generate initial description
+        status_text.text("Analyzing current product...")
         
-        progress_bar.progress(1.0)
-        status_text.text("Background generation complete!")
+        prompt = generate_description(product)
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{img_base64}",
+                            }
+                        },
+                    ],
+                }
+            ]
+        )
+        initial_description = completion.choices[0].message.content
         
-        # Display timeline
-        st.subheader("📅 Future Development Timeline")
-        for i, step in enumerate(steps):
-            with st.expander(f"{step.year}", expanded=i == 0):
-                col1, col2 = st.columns([2, 1])
-                with col1:
-                    st.markdown(f"**Technology Description:**\n{step.description}")
-                with col2:
-                    st.markdown(f"**Year:** {step.year}")
-                    st.markdown(f"**From Now:** {step.year - 2025} years")
-                
-                if i > 0:
-                    st.markdown("**AP Model Background Changes:**")
-                    st.markdown(history[i+1]['background'])
+        # Store initial description
+        description_history.append({
+            "step": 1,
+            "description": initial_description
+        })
         
+        progress_bar.progress(0.15)
+        
+        # Generate initial background
+        status_text.text("Creating initial societal background based on AP model...")
+        
+        user_prompt = build_background(product, user_experience, avant_garde_issue)
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": user_prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{img_base64}",
+                            }
+                        },
+                    ],
+                }
+            ]
+        )
+        initial_background = completion.choices[0].message.content
+        
+        # Store initial background
+        bg_history.append({
+            "step": 1,
+            "background": initial_background
+        })
+        
+        progress_bar.progress(0.3)
+        
+        # Display Stage 1
+        st.subheader("🌱 Stage 1: Ferment Period")
+        with st.expander("View Stage 1 Details", expanded=False):
+            st.markdown("**Current Description:**")
+            st.markdown(initial_description)
+            st.markdown("**AP Model Background:**")
+            st.markdown(initial_background)
+    
+    with step2_container:
+        # Step 2: Update description
+        status_text.text("Evolving to Take-off period...")
+        
+        prompt = update_description(product, description_history[0]['description'], bg_history[0]['background'], 1)
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        second_description = completion.choices[0].message.content
+        
+        # Store second description
+        description_history.append({
+            "step": 2,
+            "description": second_description
+        })
+        
+        progress_bar.progress(0.45)
+        
+        # Update background
+        status_text.text("Updating societal background based on AP model...")
+        
+        prompt = update_background(product, bg_history[0]['background'], second_description)
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        second_background = completion.choices[0].message.content
+        
+        # Store second background
+        bg_history.append({
+            "step": 2,
+            "background": second_background
+        })
+        
+        progress_bar.progress(0.6)
+        
+        # Display Stage 2
+        st.subheader("🚀 Stage 2: Take-off Period")
+        with st.expander("View Stage 2 Details", expanded=False):
+            st.markdown("**Updated Description:**")
+            st.markdown(second_description)
+            st.markdown("**AP Model Background Changes:**")
+            st.markdown(second_background)
+    
+    with step3_container:
+        # Step 3: Update description
+        status_text.text("Evolving to Maturity period...")
+        
+        prompt = update_description(product, description_history[1]['description'], bg_history[1]['background'], 2)
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        third_description = completion.choices[0].message.content
+        
+        # Store third description
+        description_history.append({
+            "step": 3,
+            "description": third_description
+        })
+        
+        progress_bar.progress(0.75)
+        
+        # Update background
+        status_text.text("Finalizing societal background based on AP model...")
+        
+        prompt = update_background(product, bg_history[1]['background'], third_description)
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        third_background = completion.choices[0].message.content
+        
+        # Store third background
+        bg_history.append({
+            "step": 3,
+            "background": third_background
+        })
+        
+        progress_bar.progress(0.85)
+        
+        # Display Stage 3
+        st.subheader("🏆 Stage 3: Maturity Period")
+        with st.expander("View Stage 3 Details", expanded=False):
+            st.markdown("**Final Description:**")
+            st.markdown(third_description)
+            st.markdown("**AP Model Background Changes:**")
+            st.markdown(third_background)
+    
+    with final_container:
         # Generate science fiction story
-        with st.spinner("Creating science fiction story..."):
-            status_text = st.empty()
-            status_text.markdown("**⏳ Generating science fiction story... This may take a moment.**")
-            
-            story_prompt = generate_story(history[-1]['background'], product)
-            completion = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": story_prompt}
-                ]
-            )
-            story = completion.choices[0].message.content
-            status_text.markdown("**✅ Story generation complete!**")
+        status_text.text("⏳ Creating science fiction story... This may take a moment.")
+        
+        story_prompt = generate_story(product, bg_history, description_history)
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": story_prompt}
+            ]
+        )
+        story = completion.choices[0].message.content
+        
+        progress_bar.progress(0.9)
         
         # Generate story cover
-        with st.spinner("Generating story cover... This may take a moment."):
-            cover_img = client.images.generate(
-                model="gpt-image-1",
-                prompt=f"Draw a cover for the short story: {story}",
-                size="1024x1024",
-                quality="low"
-            )
-            cover_image_bytes = base64.b64decode(cover_img.data[0].b64_json)
-            cover_image = Image.open(io.BytesIO(cover_image_bytes))
+        status_text.text("Generating story cover... This may take a moment.")
+        
+        cover_img = client.images.generate(
+            model="gpt-image-1",
+            prompt=f"Draw a cover for the short story about the evolution of {product}: {story}",
+            size="1024x1024",
+            quality="low"
+        )
+        cover_image_bytes = base64.b64decode(cover_img.data[0].b64_json)
+        cover_image = Image.open(io.BytesIO(cover_image_bytes))
+        
+        progress_bar.progress(1.0)
+        status_text.text("✅ Generation complete!")
+        time.sleep(0.5)
+        progress_placeholder.empty()
+        status_text.empty()
         
         # Display story and cover
         st.subheader("📚 Science Fiction Story")
@@ -263,19 +384,29 @@ The 12 paths are:
         
         # Download buttons
         st.subheader("Download Options")
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            # Download timeline JSON
-            timeline_json = json.dumps(history, ensure_ascii=False, indent=2)
+            # Download background history JSON
+            bg_json = json.dumps(bg_history, ensure_ascii=False, indent=2)
             st.download_button(
-                label="📥 Download Timeline JSON",
-                data=timeline_json,
-                file_name="timeline.json",
+                label="📥 Download AP Model JSON",
+                data=bg_json,
+                file_name="background_history.json",
                 mime="application/json"
             )
         
         with col2:
+            # Download description history JSON
+            desc_json = json.dumps(description_history, ensure_ascii=False, indent=2)
+            st.download_button(
+                label="📥 Download Descriptions JSON",
+                data=desc_json,
+                file_name="description_history.json",
+                mime="application/json"
+            )
+        
+        with col3:
             # Download story
             st.download_button(
                 label="📥 Download Story",
@@ -284,7 +415,7 @@ The 12 paths are:
                 mime="text/plain"
             )
         
-        with col3:
+        with col4:
             # Download cover image
             buffered = io.BytesIO()
             cover_image.save(buffered, format="PNG")
@@ -295,7 +426,7 @@ The 12 paths are:
                 mime="image/png"
             )
         
-        st.success("✨ Generation Complete!")
+        st.success("✨ Generation Complete! Your science fiction evolution story is ready.")
 
 else:
     # Show instructions when not running
@@ -306,7 +437,7 @@ else:
        - User Experience Description
        - Avant-garde Issue (potential problems)
     2. Upload a product image
-    3. Click "Generate Timeline and Story" button
+    3. Click "Generate Evolution Story" button
     4. Wait for processing to complete and download results
     """)
     
@@ -315,16 +446,16 @@ else:
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("""
-        **Product Name:** Smart Glasses
+        **Product Name:** AR Glasses
         
         **User Experience:**  
-        Wearing smart glasses allows real-time translation of conversations, augmented reality navigation, making my travels more relaxed and comfortable.
+        Wearing AR glasses provides me with contextual information about my surroundings, enhancing my daily interactions with real-time translations and navigation.
         
         **Avant-garde Issue:**  
-        May lead to over-dependence on technology, reduced genuine human interaction, and privacy violation risks.
+        The glasses raise concerns about continuous surveillance, privacy violations, and creating social divides between users and non-users.
         """)
     with col2:
-        st.info("Upload an image of smart glasses. AI will generate a 25-year development timeline and science fiction story based on this information.")
+        st.info("Upload an image of AR glasses, and the AI will generate a 3-stage evolution timeline and science fiction story based on this information.")
 
 # Sidebar footer
 st.sidebar.markdown("---")
