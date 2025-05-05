@@ -1,6 +1,6 @@
 # 🚀 Near Future SF Generator
 
-This is a **Streamlit-based application** that helps users generate a **25-year science fiction development timeline** and a **short sci-fi story** based on a real-world product and user experience, guided by the **S-Curve model** and **Archaeological Prototyping (AP) model**.
+This is a **Streamlit-based application** that helps users generate a **3-steps development timeline** and a **short sci-fi story** based on a real-world product and user experience, guided by the **S-Curve model** and **Archaeological Prototyping (AP) model**.
 
 ## 🔍 Features
 
@@ -10,11 +10,12 @@ This is a **Streamlit-based application** that helps users generate a **25-year 
   - User experience description
   - Potential avant-garde issue
 - Automatically generate:
-  - **Technology evolution timeline** (2025–2050) based on S-Curve model
+  - **Technology evolution timeline** 3 steps based on S-Curve model
   - **Sociocultural background changes** based on AP model
   - **Original science fiction story** (with AI-generated cover)
 - Downloadable results:
-  - Timeline (`timeline.json`)
+  - Timeline (`description_history.json`)
+  - AP background (`background_history.json`)
   - Sci-fi story (`story.txt`)
   - Story cover image (`cover.png`)
 
@@ -53,7 +54,7 @@ This is a **Streamlit-based application** that helps users generate a **25-year 
 1. **Product**: Smart Glasses  
 2. **Experience**: Real-time translation, AR navigation  
 3. **Issue**: Over-dependence, privacy risks  
-➡️ Generates a timeline from 2025 to 2050 and an original story imagining future impacts.
+➡️ Generates an original story imagining future impacts.
 
 ## 📜 License
 
