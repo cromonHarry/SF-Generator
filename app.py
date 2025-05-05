@@ -10,7 +10,7 @@ import os
 import time
 
 # Initialize OpenAI client with your API key
-client = OpenAI()
+client = OpenAI(api_key=st.secrets["openai"]["api_key"])
 
 # Title and description
 st.title("🚀 Near Future SF Generator")
