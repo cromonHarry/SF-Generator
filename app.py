@@ -1,8 +1,6 @@
 import streamlit as st
 import base64
 from openai import OpenAI
-import pathlib
-from pydantic import BaseModel
 from PIL import Image
 import json
 import io
@@ -18,6 +16,20 @@ st.markdown("""
 This application generates a 3-stage evolutionary timeline and science fiction story based on the technology product you're interested in.
 Please upload a product image and fill in the relevant information.
 """)
+
+# Initialize session state to store generated data
+if 'generated' not in st.session_state:
+    st.session_state.generated = False
+if 'bg_history' not in st.session_state:
+    st.session_state.bg_history = []
+if 'description_history' not in st.session_state:
+    st.session_state.description_history = []
+if 'story' not in st.session_state:
+    st.session_state.story = ""
+if 'image_data' not in st.session_state:
+    st.session_state.image_data = []
+if 'cover_image_data' not in st.session_state:
+    st.session_state.cover_image_data = None
 
 # Sidebar for inputs
 with st.sidebar:
@@ -57,6 +69,18 @@ def encode_image(img):
     buffered = io.BytesIO()
     img.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+def save_temp_image(img):
+    """Save a PIL Image to a temporary file and return the file path"""
+    temp_file = "temp_image.png"
+    img.save(temp_file, format="PNG")
+    return temp_file
+
+def get_image_bytes(pil_img):
+    """Convert PIL image to bytes for download button"""
+    buffered = io.BytesIO()
+    pil_img.save(buffered, format="PNG")
+    return buffered.getvalue()
 
 # Prompts from your code
 SYSTEM_PROMPT = """You are an expert of science fictionist. You analyze the society based on the Archaeological Prototyping(AP) model. Here is the introduction about this model:
@@ -130,8 +154,22 @@ Here is the background settings based on AP model in 3 development steps:
 Your story should be no more than 500 words.
 """
 
+def generate_image_edit_prompt(product, next_description, step):
+    """Generate prompt for image editing based on the evolution stage"""
+    stage_names = {
+        1: "Ferment Period",
+        2: "Take-off Period",
+        3: "Maturity Period"
+    }
+    
+    return f"""
+Transform this image of {product} to show how it evolves in the {stage_names[step]}.
+New evolved description: {next_description}
+Make realistic visual changes that reflect the technological evolution described. 
+"""
+
 # Main content area
-if generate_button and product and user_experience and avant_garde_issue and uploaded_file:
+if generate_button and product and user_experience and avant_garde_issue and uploaded_file and not st.session_state.generated:
     # Initialize containers for each step
     initial_container = st.container()
     step1_container = st.container()
@@ -150,6 +188,12 @@ if generate_button and product and user_experience and avant_garde_issue and upl
             
             # Convert to base64
             img_base64 = encode_image(resized_image)
+            
+            # Save as temp file
+            temp_image_path = save_temp_image(resized_image)
+            
+            # Store images history
+            image_history = [resized_image]
             
             # Display input image
             st.subheader("Input Image")
@@ -227,6 +271,35 @@ if generate_button and product and user_experience and avant_garde_issue and upl
             "background": initial_background
         })
         
+        progress_bar.progress(0.25)
+        
+        # Generate evolved image for stage 1 based on initial description
+        status_text.text("Generating product image for Ferment period...")
+        
+        # Create image edit prompt
+        image_edit_prompt = f"""
+        Transform this image of {product} to visually represent it in the Ferment period.
+        Make it match this description: {initial_description}
+        """
+        
+        # Edit image using gpt-image-1
+        with open(temp_image_path, "rb") as img_file:
+            result = client.images.edit(
+                model="gpt-image-1",
+                image=img_file,
+                prompt=image_edit_prompt,
+                quality="low"
+            )
+        
+        # Save and process stage 1 image
+        stage1_image_bytes = base64.b64decode(result.data[0].b64_json)
+        stage1_image = Image.open(io.BytesIO(stage1_image_bytes))
+        stage1_image_path = "stage1_image.png"
+        stage1_image.save(stage1_image_path)
+        
+        # Update image history - replace the original uploaded image with the evolved one
+        image_history[0] = stage1_image
+        
         progress_bar.progress(0.3)
         
         # Display Stage 1
@@ -236,6 +309,8 @@ if generate_button and product and user_experience and avant_garde_issue and upl
             st.markdown(initial_description)
             st.markdown("**AP Model Background:**")
             st.markdown(initial_background)
+            st.markdown("**Product Image:**")
+            st.image(stage1_image, caption=f"{product} - Ferment Period", use_container_width=True)
     
     with step2_container:
         # Step 2: Update description
@@ -256,6 +331,36 @@ if generate_button and product and user_experience and avant_garde_issue and upl
             "step": 2,
             "description": second_description
         })
+        
+        progress_bar.progress(0.40)
+        
+        # Generate evolved image for stage 2
+        status_text.text("Generating evolved product image for Take-off period...")
+        
+        # Create image edit prompt
+        image_edit_prompt = generate_image_edit_prompt(
+            product, 
+            second_description, 
+            2
+        )
+        
+        # Edit image using gpt-image-1
+        with open(stage1_image_path, "rb") as img_file:
+            result = client.images.edit(
+                model="gpt-image-1",
+                image=img_file,
+                prompt=image_edit_prompt,
+                quality="low"
+            )
+        
+        # Save and process stage 2 image
+        stage2_image_bytes = base64.b64decode(result.data[0].b64_json)
+        stage2_image = Image.open(io.BytesIO(stage2_image_bytes))
+        stage2_image_path = "stage2_image.png"
+        stage2_image.save(stage2_image_path)
+        
+        # Add to image history
+        image_history.append(stage2_image)
         
         progress_bar.progress(0.45)
         
@@ -287,6 +392,8 @@ if generate_button and product and user_experience and avant_garde_issue and upl
             st.markdown(second_description)
             st.markdown("**AP Model Background Changes:**")
             st.markdown(second_background)
+            st.markdown("**Evolved Product Image:**")
+            st.image(stage2_image, caption=f"{product} - Take-off Period", use_container_width=True)
     
     with step3_container:
         # Step 3: Update description
@@ -307,6 +414,36 @@ if generate_button and product and user_experience and avant_garde_issue and upl
             "step": 3,
             "description": third_description
         })
+        
+        progress_bar.progress(0.70)
+        
+        # Generate evolved image for stage 3
+        status_text.text("Generating evolved product image for Maturity period...")
+        
+        # Create image edit prompt
+        image_edit_prompt = generate_image_edit_prompt(
+            product, 
+            third_description, 
+            3
+        )
+        
+        # Edit image using gpt-image-1
+        with open(stage2_image_path, "rb") as img_file:
+            result = client.images.edit(
+                model="gpt-image-1",
+                image=img_file,
+                prompt=image_edit_prompt,
+                quality="low"
+            )
+        
+        # Save and process stage 3 image
+        stage3_image_bytes = base64.b64decode(result.data[0].b64_json)
+        stage3_image = Image.open(io.BytesIO(stage3_image_bytes))
+        stage3_image_path = "stage3_image.png"
+        stage3_image.save(stage3_image_path)
+        
+        # Add to image history
+        image_history.append(stage3_image)
         
         progress_bar.progress(0.75)
         
@@ -338,6 +475,8 @@ if generate_button and product and user_experience and avant_garde_issue and upl
             st.markdown(third_description)
             st.markdown("**AP Model Background Changes:**")
             st.markdown(third_background)
+            st.markdown("**Evolved Product Image:**")
+            st.image(stage3_image, caption=f"{product} - Maturity Period", use_container_width=True)
     
     with final_container:
         # Generate science fiction story
@@ -361,7 +500,6 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         cover_img = client.images.generate(
             model="gpt-image-1",
             prompt=f"Draw a cover for the short story about the evolution of {product}: {story}",
-            size="1024x1024",
             quality="low"
         )
         cover_image_bytes = base64.b64decode(cover_img.data[0].b64_json)
@@ -373,60 +511,114 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         progress_placeholder.empty()
         status_text.empty()
         
-        # Display story and cover
-        st.subheader("📚 Science Fiction Story")
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            st.image(cover_image, caption="Story Cover", use_container_width=True)
-        with col2:
-            st.markdown("**Story Text:**")
-            st.markdown(story)
+        # Store generated data in session state
+        st.session_state.bg_history = bg_history
+        st.session_state.description_history = description_history
+        st.session_state.story = story
+        st.session_state.image_data = [get_image_bytes(img) for img in image_history]
+        st.session_state.cover_image_data = get_image_bytes(cover_image)
+        st.session_state.product = product
+        st.session_state.generated = True
         
-        # Download buttons
-        st.subheader("Download Options")
-        col1, col2, col3, col4 = st.columns(4)
+        # Clean up temporary image files
+        for file_path in [temp_image_path, stage1_image_path, stage2_image_path, stage3_image_path]:
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except:
+                    pass
+                    
+        # Force rerun to display results with storage
+        st.rerun()
+
+# Display results if already generated
+if st.session_state.generated:
+    # Display evolution timeline
+    st.subheader("🔄 Product Evolution Timeline")
+    cols = st.columns(3)
+    stages = ["Ferment", "Take-off", "Maturity"]
+    
+    for i, stage in enumerate(stages):
+        with cols[i]:
+            st.image(io.BytesIO(st.session_state.image_data[i]), caption=f"Stage {i+1}: {stage} Period", use_container_width=True)
+            with st.expander(f"View Stage {i+1} Description"):
+                st.markdown(st.session_state.description_history[i]['description'])
+    
+    # Display story and cover
+    st.subheader("📚 Science Fiction Story")
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        st.image(io.BytesIO(st.session_state.cover_image_data), caption="Story Cover", use_container_width=True)
+    with col2:
+        st.markdown("**Story Text:**")
+        st.markdown(st.session_state.story)
+    
+    # Download buttons
+    st.subheader("Download Options")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        # Download background history JSON
+        bg_json = json.dumps(st.session_state.bg_history, ensure_ascii=False, indent=2)
+        st.download_button(
+            label="📥 Download AP Model JSON",
+            data=bg_json,
+            file_name="background_history.json",
+            mime="application/json",
+            key="download_bg_json"
+        )
         
-        with col1:
-            # Download background history JSON
-            bg_json = json.dumps(bg_history, ensure_ascii=False, indent=2)
+        # Download story
+        st.download_button(
+            label="📥 Download Story",
+            data=st.session_state.story,
+            file_name="story.txt",
+            mime="text/plain",
+            key="download_story"
+        )
+    
+    with col2:
+        # Download description history JSON
+        desc_json = json.dumps(st.session_state.description_history, ensure_ascii=False, indent=2)
+        st.download_button(
+            label="📥 Download Descriptions JSON",
+            data=desc_json,
+            file_name="description_history.json",
+            mime="application/json",
+            key="download_desc_json"
+        )
+        
+        # Download cover image
+        st.download_button(
+            label="📥 Download Cover Image",
+            data=st.session_state.cover_image_data,
+            file_name="cover.png",
+            mime="image/png",
+            key="download_cover"
+        )
+    
+    with col3:
+        # Download evolved images
+        for i, img_bytes in enumerate(st.session_state.image_data):
+            stage_name = ["Ferment", "Take-off", "Maturity"][i]
             st.download_button(
-                label="📥 Download AP Model JSON",
-                data=bg_json,
-                file_name="background_history.json",
-                mime="application/json"
+                label=f"📥 Download {stage_name} Image",
+                data=img_bytes,
+                file_name=f"stage{i+1}_{stage_name.lower()}.png",
+                mime="image/png",
+                key=f"download_stage{i+1}"
             )
-        
-        with col2:
-            # Download description history JSON
-            desc_json = json.dumps(description_history, ensure_ascii=False, indent=2)
-            st.download_button(
-                label="📥 Download Descriptions JSON",
-                data=desc_json,
-                file_name="description_history.json",
-                mime="application/json"
-            )
-        
-        with col3:
-            # Download story
-            st.download_button(
-                label="📥 Download Story",
-                data=story,
-                file_name="story.txt",
-                mime="text/plain"
-            )
-        
-        with col4:
-            # Download cover image
-            buffered = io.BytesIO()
-            cover_image.save(buffered, format="PNG")
-            st.download_button(
-                label="📥 Download Cover Image",
-                data=buffered.getvalue(),
-                file_name="cover.png",
-                mime="image/png"
-            )
-        
-        st.success("✨ Generation Complete! Your science fiction evolution story is ready.")
+    
+    # Reset button
+    if st.button("🔄 Generate New Story", type="primary"):
+        # Reset session state
+        st.session_state.generated = False
+        st.session_state.bg_history = []
+        st.session_state.description_history = []
+        st.session_state.story = ""
+        st.session_state.image_data = []
+        st.session_state.cover_image_data = None
+        st.rerun()
 
 else:
     # Show instructions when not running
