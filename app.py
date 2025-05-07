@@ -24,8 +24,12 @@ if 'bg_history' not in st.session_state:
     st.session_state.bg_history = []
 if 'description_history' not in st.session_state:
     st.session_state.description_history = []
+if 'key_elements_history' not in st.session_state:
+    st.session_state.key_elements_history = []
 if 'story' not in st.session_state:
     st.session_state.story = ""
+if 'direct_story' not in st.session_state:
+    st.session_state.direct_story = ""
 if 'image_data' not in st.session_state:
     st.session_state.image_data = []
 if 'cover_image_data' not in st.session_state:
@@ -154,6 +158,25 @@ Here is the background settings based on AP model in 3 development steps:
 Your story should be no more than 500 words.
 """
 
+def generate_direct_story(product, user_experience, avant_garde_issue):
+    """Generate a story directly without using AP model or S-curve"""
+    return f"""
+Please generate an interesting short science fiction story about {product}.
+Consider these aspects:
+- Current user experience: {user_experience}
+- Current issues: {avant_garde_issue}
+
+Please imagine how this product might evolve in the near future, and create a compelling narrative around it.
+Your story should be no more than 500 words.
+"""
+
+def seperate_background(description):
+    return f"""
+Here is the description of objects and paths that are related to the AP model: {description}.
+Please pick out these 3 objects: [Avant-garde social issues], [Technology and resource], [User experience].
+Please output the description of these 3 objects in the following format: Avant-garde social issues: [description], Technology and resource: [description], User experience: [description].
+"""
+
 def generate_image_edit_prompt(product, next_description, step):
     """Generate prompt for image editing based on the evolution stage"""
     stage_names = {
@@ -197,7 +220,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
             
             # Display input image
             st.subheader("Input Image")
-            st.image(resized_image, caption=f"{product} - Current State", use_container_width=True)
+            st.image(resized_image, caption=f"{product} - Current State", width=None)
     
     # Create placeholder for progress
     progress_placeholder = st.empty()
@@ -207,6 +230,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
     # Storage for history
     bg_history = []
     description_history = []
+    key_elements_history = []
     
     with step1_container:
         # Step 1: Generate initial description
@@ -271,6 +295,23 @@ if generate_button and product and user_experience and avant_garde_issue and upl
             "background": initial_background
         })
         
+        # Extract key elements from background
+        extract_prompt = seperate_background(initial_background)
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": extract_prompt}
+            ]
+        )
+        key_elements = completion.choices[0].message.content
+        
+        # Store key elements
+        key_elements_history.append({
+            "step": 1,
+            "elements": key_elements
+        })
+        
         progress_bar.progress(0.25)
         
         # Generate evolved image for stage 1 based on initial description
@@ -309,8 +350,10 @@ if generate_button and product and user_experience and avant_garde_issue and upl
             st.markdown(initial_description)
             st.markdown("**AP Model Background:**")
             st.markdown(initial_background)
+            st.markdown("**Key Elements:**")
+            st.markdown(key_elements)
             st.markdown("**Product Image:**")
-            st.image(stage1_image, caption=f"{product} - Ferment Period", use_container_width=True)
+            st.image(stage1_image, caption=f"{product} - Ferment Period", width=None)
     
     with step2_container:
         # Step 2: Update description
@@ -383,6 +426,23 @@ if generate_button and product and user_experience and avant_garde_issue and upl
             "background": second_background
         })
         
+        # Extract key elements from background
+        extract_prompt = seperate_background(second_background)
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": extract_prompt}
+            ]
+        )
+        key_elements = completion.choices[0].message.content
+        
+        # Store key elements
+        key_elements_history.append({
+            "step": 2,
+            "elements": key_elements
+        })
+        
         progress_bar.progress(0.6)
         
         # Display Stage 2
@@ -392,8 +452,10 @@ if generate_button and product and user_experience and avant_garde_issue and upl
             st.markdown(second_description)
             st.markdown("**AP Model Background Changes:**")
             st.markdown(second_background)
+            st.markdown("**Key Elements:**")
+            st.markdown(key_elements)
             st.markdown("**Evolved Product Image:**")
-            st.image(stage2_image, caption=f"{product} - Take-off Period", use_container_width=True)
+            st.image(stage2_image, caption=f"{product} - Take-off Period", width=None)
     
     with step3_container:
         # Step 3: Update description
@@ -466,6 +528,23 @@ if generate_button and product and user_experience and avant_garde_issue and upl
             "background": third_background
         })
         
+        # Extract key elements from background
+        extract_prompt = seperate_background(third_background)
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": extract_prompt}
+            ]
+        )
+        key_elements = completion.choices[0].message.content
+        
+        # Store key elements
+        key_elements_history.append({
+            "step": 3,
+            "elements": key_elements
+        })
+        
         progress_bar.progress(0.85)
         
         # Display Stage 3
@@ -475,8 +554,10 @@ if generate_button and product and user_experience and avant_garde_issue and upl
             st.markdown(third_description)
             st.markdown("**AP Model Background Changes:**")
             st.markdown(third_background)
+            st.markdown("**Key Elements:**")
+            st.markdown(key_elements)
             st.markdown("**Evolved Product Image:**")
-            st.image(stage3_image, caption=f"{product} - Maturity Period", use_container_width=True)
+            st.image(stage3_image, caption=f"{product} - Maturity Period", width=None)
     
     with final_container:
         # Generate science fiction story
@@ -491,6 +572,21 @@ if generate_button and product and user_experience and avant_garde_issue and upl
             ]
         )
         story = completion.choices[0].message.content
+        
+        progress_bar.progress(0.88)
+        
+        # Generate direct story (without AP model and S-curve)
+        status_text.text("Creating comparison story without AP model...")
+        
+        direct_story_prompt = generate_direct_story(product, user_experience, avant_garde_issue)
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert science fiction writer. Write a compelling near-future story."},
+                {"role": "user", "content": direct_story_prompt}
+            ]
+        )
+        direct_story = completion.choices[0].message.content
         
         progress_bar.progress(0.9)
         
@@ -514,7 +610,9 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         # Store generated data in session state
         st.session_state.bg_history = bg_history
         st.session_state.description_history = description_history
+        st.session_state.key_elements_history = key_elements_history
         st.session_state.story = story
+        st.session_state.direct_story = direct_story
         st.session_state.image_data = [get_image_bytes(img) for img in image_history]
         st.session_state.cover_image_data = get_image_bytes(cover_image)
         st.session_state.product = product
@@ -540,18 +638,57 @@ if st.session_state.generated:
     
     for i, stage in enumerate(stages):
         with cols[i]:
-            st.image(io.BytesIO(st.session_state.image_data[i]), caption=f"Stage {i+1}: {stage} Period", use_container_width=True)
+            st.image(io.BytesIO(st.session_state.image_data[i]), caption=f"Stage {i+1}: {stage} Period", width=None)
             with st.expander(f"View Stage {i+1} Description"):
                 st.markdown(st.session_state.description_history[i]['description'])
+            with st.expander(f"View Stage {i+1} Key Elements"):
+                st.markdown(st.session_state.key_elements_history[i]['elements'])
+    
+    # Display Key Elements Evolution across stages
+    st.subheader("📊 Key Elements Evolution")
+    
+    # Extract and separate the elements from each stage
+    elements_by_type = {
+        "Avant-garde social issues": [],
+        "Technology and resource": [],
+        "User experience": []
+    }
+    
+    for stage_data in st.session_state.key_elements_history:
+        elements_text = stage_data["elements"]
+        # Split by the element types
+        parts = elements_text.split("\n\n")
+        for part in parts:
+            if part.startswith("Avant-garde social issues:"):
+                elements_by_type["Avant-garde social issues"].append(part.replace("Avant-garde social issues:", "").strip())
+            elif part.startswith("Technology and resource:"):
+                elements_by_type["Technology and resource"].append(part.replace("Technology and resource:", "").strip())
+            elif part.startswith("User experience:"):
+                elements_by_type["User experience"].append(part.replace("User experience:", "").strip())
+    
+    # Display each element type's evolution
+    for element_type, stages_content in elements_by_type.items():
+        st.markdown(f"**{element_type}**")
+        element_cols = st.columns(3)
+        for i, (content, stage) in enumerate(zip(stages_content, stages)):
+            with element_cols[i]:
+                st.markdown(f"*Stage {i+1}: {stage} Period*")
+                st.markdown(content)
+        st.markdown("---")
     
     # Display story and cover
-    st.subheader("📚 Science Fiction Story")
+    st.subheader("📚 AP Model-based Science Fiction Story")
     col1, col2 = st.columns([1, 2])
     with col1:
-        st.image(io.BytesIO(st.session_state.cover_image_data), caption="Story Cover", use_container_width=True)
+        st.image(io.BytesIO(st.session_state.cover_image_data), caption="Story Cover", width=None)
     with col2:
         st.markdown("**Story Text:**")
         st.markdown(st.session_state.story)
+    
+    # Display direct story for comparison
+    st.subheader("📝 Direct Science Fiction Story (without AP Model)")
+    st.markdown("**Story Text (for comparison):**")
+    st.markdown(st.session_state.direct_story)
     
     # Download buttons
     st.subheader("Download Options")
@@ -570,7 +707,7 @@ if st.session_state.generated:
         
         # Download story
         st.download_button(
-            label="📥 Download Story",
+            label="📥 Download AP Story",
             data=st.session_state.story,
             file_name="story.txt",
             mime="text/plain",
@@ -586,6 +723,26 @@ if st.session_state.generated:
             file_name="description_history.json",
             mime="application/json",
             key="download_desc_json"
+        )
+        
+        # Download direct story
+        st.download_button(
+            label="📥 Download Direct Story",
+            data=st.session_state.direct_story,
+            file_name="direct_story.txt",
+            mime="text/plain",
+            key="download_direct_story"
+        )
+    
+    with col3:
+        # Download key elements JSON
+        key_elements_json = json.dumps(st.session_state.key_elements_history, ensure_ascii=False, indent=2)
+        st.download_button(
+            label="📥 Download Key Elements JSON",
+            data=key_elements_json,
+            file_name="key_elements_history.json",
+            mime="application/json",
+            key="download_key_elements_json"
         )
         
         # Download cover image
@@ -615,7 +772,9 @@ if st.session_state.generated:
         st.session_state.generated = False
         st.session_state.bg_history = []
         st.session_state.description_history = []
+        st.session_state.key_elements_history = []
         st.session_state.story = ""
+        st.session_state.direct_story = ""
         st.session_state.image_data = []
         st.session_state.cover_image_data = None
         st.rerun()
