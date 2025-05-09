@@ -8,7 +8,8 @@ import os
 import time
 
 # Initialize OpenAI client with your API key
-client = OpenAI(api_key=st.secrets["openai"]["api_key"])
+#client = OpenAI(api_key=st.secrets["openai"]["api_key"])
+client = OpenAI()
 
 # Title and description
 st.title("🚀 Near Future SF Generator")
@@ -30,29 +31,55 @@ if 'image_data' not in st.session_state:
     st.session_state.image_data = []
 if 'cover_image_data' not in st.session_state:
     st.session_state.cover_image_data = None
+if 'demo_clicked' not in st.session_state:
+    st.session_state.demo_clicked = False
 
 # Sidebar for inputs
 with st.sidebar:
     st.header("Input Information")
     
+    # Add demo button at the top of sidebar
+    st.info("Limited API usage available. Try the demo first!")
+    demo_button = st.button("🎮 Generate Demo", help="Click this to show the example story about smartphone", type="primary")
+    
+    if demo_button:
+        st.session_state.demo_clicked = True
+    
     # Product input
-    product = st.text_input("Tell me your interest product.", placeholder="e.g., Smartphone")
+    product = st.text_input("Tell me your interest product.", 
+                           value="Smartphone" if st.session_state.demo_clicked else "",
+                           placeholder="e.g., Smartphone")
     
     # User experience input
     user_experience = st.text_area("Why do you think this product is good?", 
-                                   placeholder="e.g., It allows me talk with my parents from anywhere in the world.",
-                                   height=100)
+                                  value="It allows me talk with my parents from anywhere in the world." if st.session_state.demo_clicked else "",
+                                  placeholder="e.g., It allows me talk with my parents from anywhere in the world.",
+                                  height=100)
     
     # Avant-garde issue input
     avant_garde_issue = st.text_area("Is there any problem that you think is not good enough?", 
-                                     placeholder="e.g., People spend too much time on it.",
-                                     height=100)
+                                    value="People spend too much time on it." if st.session_state.demo_clicked else "",
+                                    placeholder="e.g., People spend too much time on it.",
+                                    height=100)
     
     # Image upload
     uploaded_file = st.file_uploader("Upload Product Image", type=['png', 'jpg', 'jpeg'])
     
+    # Load demo image when demo button is clicked
+    if st.session_state.demo_clicked and not uploaded_file:
+        try:
+            # Try to open the demo image from the root directory
+            demo_image = open("smartphone_demo.png", "rb")
+            uploaded_file = demo_image
+        except FileNotFoundError:
+            st.error("Demo image not found. Please upload an image manually.")
+    
     # Generate button
     generate_button = st.button("🔮 Generate Story", type="primary")
+    
+    # Auto-click generate button if demo mode is active and all fields are filled
+    if st.session_state.demo_clicked and product and user_experience and avant_garde_issue and uploaded_file and not st.session_state.generated:
+        generate_button = True
 
 # Helper functions
 def resize_image(img):
@@ -622,6 +649,7 @@ if st.session_state.generated:
         st.session_state.story = ""
         st.session_state.image_data = []
         st.session_state.cover_image_data = None
+        st.session_state.demo_clicked = False
         st.rerun()
 
 else:
@@ -633,8 +661,10 @@ else:
        - User Experience Description
        - Avant-garde Issue (potential problems)
     2. Upload a product image
-    3. Click "Generate Evolution Story" button
+    3. Click "Generate Story" button
     4. Wait for processing to complete and download results
+    
+    **Or simply click the "Generate Demo" button in the sidebar to try with the smartphone example!**
     """)
     
     # Show example
@@ -645,11 +675,19 @@ else:
         **Product Name:** Smartphone
         
         **User Experience:**  
-       It allows me talk with my parents from anywhere in the world.
+        It allows me talk with my parents from anywhere in the world.
         
         **Avant-garde Issue:**  
         People spend too much time on it.
         """)
+        
+    with col2:
+        # Display the demo smartphone image if available
+        try:
+            example_img = Image.open("smartphone_demo.jpg")
+            st.image(example_img, caption="Example: Smartphone", use_container_width=True)
+        except:
+            st.info("Demo image will be displayed when the demo is generated.")
 
 # Sidebar footer
 st.sidebar.markdown("---")
