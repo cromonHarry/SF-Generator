@@ -7,7 +7,6 @@ import io
 import os
 import time
 
-# Initialize OpenAI client with your API key
 client = OpenAI(api_key=st.secrets["openai"]["api_key"])
 
 # Title and description
@@ -111,7 +110,7 @@ def get_image_bytes(pil_img):
 # Prompts from your code
 SYSTEM_PROMPT = """You are an expert of science fictionist. You analyze the society based on the Archaeological Prototyping(AP) model. Here is the introduction about this model:
 AP is a sociocultural model composed of 18 items (6 objects and 12 paths). In essence, it's a model that divides society and culture into these 18 elements and logically depicts their connections.
-The 6 objects are:
+##The 6 objects are:
 1. Avant-garde social issues: Social issues caused by paradigms of technology and resources, and the everyday spaces and user experiences shaped by them, are made visible through art (social critisim).
 2. Human's value: The desired state of people who empathize with avant-garde social issues disseminated through cultural and artistic promotion, as well as with social issues that cannot be addressed by existing systems and are spread through everyday communication. These issues are not recognized by everyone, but only by a certain group of progressive or minority individuals. Specifically, they include macro-level environmental issues (such as climate and ecology) and human-centered environmental issues (such as ethics, economics, and public health).
 3. Social Issue: Social issues that are brought to public awareness by progressive communities tackling avant-garde problems, as well as systemic issues exposed through the media. These issues become visible as targets that society must address.
@@ -119,7 +118,7 @@ The 6 objects are:
 5. User experiences: A physical space composed of products and services developed through the mobilization of technologies and resources. Within this space, users assign meaning to these products and services based on certain values, and engage in experiences through their use. The relationship between values and user experience can be illustrated, for example, by people who hold the value of "wanting to become an AI engineer" interpreting a PC as "a tool for learning programming" and thereby engaging in the experience of "programming."
 6. System: Systems created to facilitate the routines practiced by people who hold certain values, as well as systems established to enable stakeholders involved in businesses that shape everyday spaces and user experiences (i.e., the business ecosystem) to operate more smoothly. Specifically, these include laws, guidelines, industry standards, administrative guidance, and moral codes.
 
-The 12 paths are:
+##The 12 paths are:
 1. Media: Media that reveal the institutional shortcomings of modern society. This includes not only mainstream media such as mass media and online media, but also individuals who disseminate information. These actors play a role in transforming institutional issues into social issues.
 2. Communization: Communities formed by individuals who recognize avant-garde issues, regardless of whether they are formal or informal. These communities play a role in transforming underlying issues into social issues.
 3. Culture art revitalization: Activities that present social issues made visible through art (as social critique) in the form of artworks and communicate them to the public. These activities serve to transform avant-garde issues into values held by individuals.
@@ -134,34 +133,50 @@ The 12 paths are:
 12. Art (Social Critique): A person's belief that views problems that people are unaware of from a subjective/intrinsic perspective. It has the role of feeling discomfort with everyday spaces and user experiences and presenting problems. Converting everyday spaces and user experiences into avant-garde issues.
 """
 
-def generate_description(product):
+def generate_description(product, user_experience, avant_garde_issue):
     return f"""
-Here is the image of {product}. Please generate a description of this product, such as appearance or function. Less than 100 words.
+Here are some information about the {product}:
+##Positive feedback: {user_experience}
+##Negative feedback: {avant_garde_issue}
+Here is an related example image. Please generate a description of this product, such as appearance or function. Less than 100 words.
 """
 
 
 def build_background(product, user_experience, avant_garde_issue):
     return f"""
 Here are some information about the {product}:
-Positive feedback: {user_experience}
-Negative feedback: {avant_garde_issue}
-Please analyze and generate the all objects and paths in AP model based on the given information. Only output the objects and paths.
+##Positive feedback: {user_experience}
+##Negative feedback: {avant_garde_issue}
+Please analyze and generate the all objects and paths in AP model based on the given information. Only output the objects and paths. Let's think step by step.
 """
 
-def update_description(product, description, background, step):
-    return f"""
-This is {product}. Analyze the technological evolution path of it.
-Please base the analysis on the S-curve model and predict the key developments at the following steps:
+def update_description(product, description_history, bg_history, initial_description, step):
+    introduction = f"""
+This is {product}. The development of this technology follows these 3 steps:
+##Step 1: Ferment period: In this step, technological development progresses steadily, focusing mainly on solving existing problems and improving current functionalities. At the end of this period, current problem will be solved and new problem will happen.
+##Step 2: Take-off period: In this step, technology enters a period of rapid development. People propose various innovative ideas, which are eventually combined to form entirely new forms of technology. At the end of this period, this technology will have a huge development, but also lead to new problem.
+##Step 3: Maturity period: In this step, technological development slows down again. While solving the problems in last stage. At the end of this period, the technology develops to a more stable and mature state.
 
-Step 1: Ferment period: In this step, technological development progresses steadily, focusing mainly on solving existing problems and improving current functionalities.
-Step 2: Take-off period: In this step, technology enters a period of rapid development. People propose various innovative ideas, which are eventually combined to form entirely new forms of technology. And also, new innovations will bring new potential problems.
-Step 3: Maturity period: In this step, technological development slows down again. While solving the problems in last stage, the technology develops to a more stable and mature state.
-
-Now the product is in step {step}. Here is the current description of it: {description}.
-Also, here is the background of it based on AP model:
-{background}
-Now please generate the new description of the product at the next step, such as appearance or function. Less than 100 words.
 """
+    if step == 0:
+        introduction += f"""
+## Initial description before step 1:
+{initial_description}
+"""
+    else:
+        for i in range(step):
+            introduction += f"""
+    ##Description after Step {i+1}: 
+    {description_history[i]['description']}
+
+    ##Background that related to AP model after Step {i+1}:
+    {bg_history[i]['background']}
+    """
+    introduction += f"""
+Now analyze and imagine what the product will look like at the end of step {step+1}, such as appearance or function. Only output the description for step {step+1} in less than 100 words.
+"""
+    
+    return introduction
 
 def update_background(product, background, description):
     return f"""
@@ -193,9 +208,9 @@ def generate_image_edit_prompt(product, next_description, step):
     }
     
     return f"""
-Transform this image of {product} to show how it evolves in the {stage_names[step]}.
-New evolved description: {next_description}
-Make realistic visual changes that reflect the technological evolution described. 
+You are an expert drawer, who is good at imagine the future.
+Here is an image of {product}. Imagine how it will looks like after the {stage_names[step]} based on the following description:
+##New evolved description: {next_description}
 """
 
 # Main content area
@@ -206,6 +221,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
     step2_container = st.container()
     step3_container = st.container()
     final_container = st.container()
+    initial_description = ""
     
     with initial_container:
         # Save uploaded image temporarily
@@ -242,11 +258,10 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         # Step 1: Generate initial description
         status_text.text("Analyzing current product...")
         
-        prompt = generate_description(product)
+        prompt = generate_description(product, user_experience, avant_garde_issue)
         completion = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
                 {
                     "role": "user",
                     "content": [
@@ -262,11 +277,20 @@ if generate_button and product and user_experience and avant_garde_issue and upl
             ]
         )
         initial_description = completion.choices[0].message.content
+
+        prompt = update_description(product, bg_history, description_history, initial_description, 0)
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
+        )
+        first_description = completion.choices[0].message.content
         
-        # Store initial description
+        # Store first step description
         description_history.append({
             "step": 1,
-            "description": initial_description
+            "description": first_description
         })
         
         progress_bar.progress(0.15)
@@ -307,10 +331,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         status_text.text("Generating product image for Ferment period...")
         
         # Create image edit prompt
-        image_edit_prompt = f"""
-        Transform this image of {product} to visually represent it in the Ferment period.
-        Make it match this description: {initial_description}
-        """
+        image_edit_prompt = generate_image_edit_prompt(product, first_description, 1)
         
         # Edit image using gpt-image-1
         with open(temp_image_path, "rb") as img_file:
@@ -336,7 +357,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         st.subheader("🌱 Stage 1: Ferment Period")
         with st.expander("View Stage 1 Details", expanded=False):
             st.markdown("**Current Description:**")
-            st.markdown(initial_description)
+            st.markdown(first_description)
             st.markdown("**AP Model Background:**")
             st.markdown(initial_background)
             st.markdown("**Product Image:**")
@@ -346,7 +367,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         # Step 2: Update description
         status_text.text("Evolving to Take-off period...")
         
-        prompt = update_description(product, description_history[0]['description'], bg_history[0]['background'], 1)
+        prompt = update_description(product, description_history, bg_history, initial_description, 1)
         completion = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -429,7 +450,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         # Step 3: Update description
         status_text.text("Evolving to Maturity period...")
         
-        prompt = update_description(product, description_history[1]['description'], bg_history[1]['background'], 2)
+        prompt = update_description(product, description_history, bg_history, initial_description, 2)
         completion = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
