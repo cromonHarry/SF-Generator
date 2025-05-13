@@ -3,7 +3,6 @@
 # Integrated Near Future SF Generator + AP Model Visualization
 # Single-file Streamlit app
 # ============================
-
 import streamlit as st
 import base64
 from openai import OpenAI
@@ -17,6 +16,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import pandas as pd
+from PIL import Image
 
 # ========== Multi-page setup ==========
 if 'page' not in st.session_state:
@@ -24,20 +24,6 @@ if 'page' not in st.session_state:
 
 # ========== Visualization Page ==========
 if st.session_state.page == "visualization":
-    import streamlit as st
-    import os
-    import sys
-    import networkx as nx
-    import json
-    import re
-    import matplotlib.pyplot as plt
-    import matplotlib.patches as mpatches
-    from matplotlib.lines import Line2D
-    import io
-    from PIL import Image
-    import pandas as pd
-    from io import BytesIO
-    import base64
     
     # Set page config
     st.set_page_config(page_title="AP Model Visualization", layout="wide")
