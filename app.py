@@ -93,7 +93,7 @@ if st.session_state.page == "visualization":
             ("Technology and resource", "User experiences", {"label": "Products and Services", "dashed": False}),
             ("Technology and resource", "Avant-garde social issues", {"label": "Paradigm", "dashed": False}),
             ("User experiences", "System", {"label": "Business Ecosystem", "dashed": False}),
-            ("User experiences", "Avant-garde social issues", {"label": "Art (Social Critique)", "dashed": True}),
+            ("User experiences", "Avant-garde social issues", {"label": "Art (Social Critism)", "dashed": True}),
             ("System", "Social Issue", {"label": "Media", "dashed": True}),
             ("Avant-garde social issues", "Human's value", {"label": "Culture art revitalization", "dashed": False}),
             ("Avant-garde social issues", "Social Issue", {"label": "Communization", "dashed": False}),
@@ -594,27 +594,28 @@ def get_image_bytes(pil_img):
 # Prompts from your code
 SYSTEM_PROMPT = """You are an expert of science fictionist. You analyze the society based on the Archaeological Prototyping(AP) model. Here is the introduction about this model:
 AP is a sociocultural model composed of 18 items (6 objects and 12 paths). In essence, it's a model that divides society and culture into these 18 elements and logically depicts their connections.
+You can also consider it as a directed graph, with 6 vertices:(Avant-garde social issues, Human's value, Social Issue, Technology and resource, User experiences, System) and 12 arcs:(Media, Communization, Culture, Standardization, Communication, Organization, Meaning-making, Products and Services, Habituation, Paradigm, Business Ecosystem, Art (Social Critism)). The connections between these vertices and arcs will be shown in the following descriptions.
 ##The 6 objects are:
 1. Avant-garde social issues: Social issues caused by paradigms of technology and resources, and the everyday spaces and user experiences shaped by them, are made visible through art (social critisim).
 2. Human's value: The desired state of people who empathize with avant-garde social issues disseminated through cultural and artistic promotion, as well as with social issues that cannot be addressed by existing systems and are spread through everyday communication. These issues are not recognized by everyone, but only by a certain group of progressive or minority individuals. Specifically, they include macro-level environmental issues (such as climate and ecology) and human-centered environmental issues (such as ethics, economics, and public health).
 3. Social Issue: Social issues that are brought to public awareness by progressive communities tackling avant-garde problems, as well as systemic issues exposed through the media. These issues become visible as targets that society must address.
 4. Technology and resource: Technologies and resources that have been standardized and constrained by the past, created to ensure the smooth functioning of everyday routines. These include those held by organizations—whether for-profit, non-profit, incorporated, or unincorporated, new or existing—that are structured to solve social issues.
-5. User experiences: A physical space composed of products and services developed through the mobilization of technologies and resources. Within this space, users assign meaning to these products and services based on certain values, and engage in experiences through their use. The relationship between values and user experience can be illustrated, for example, by people who hold the value of "wanting to become an AI engineer" interpreting a PC as "a tool for learning programming" and thereby engaging in the experience of "programming."
-6. System: Systems created to facilitate the routines practiced by people who hold certain values, as well as systems established to enable stakeholders involved in businesses that shape everyday spaces and user experiences (i.e., the business ecosystem) to operate more smoothly. Specifically, these include laws, guidelines, industry standards, administrative guidance, and moral codes.
+5. User experiences: A physical space composed of products and services developed through the mobilization of technologies and resources. Within this space, users assign meaning to these products and services based on human's values, and engage in experiences through their use. The relationship between values and user experience can be illustrated, for example, by people who hold the value of "wanting to become an AI engineer" interpreting a PC as "a tool for learning programming" and thereby engaging in the experience of "programming."
+6. System: Systems created to facilitate the routines practiced by human who hold certain values, as well as systems established to enable stakeholders involved in businesses that shape everyday spaces and user experiences (i.e., the business ecosystem) to operate more smoothly. Specifically, these include laws, guidelines, industry standards, administrative guidance, and moral codes.
 
 ##The 12 paths are:
-1. Media: Media that reveal the institutional shortcomings of modern society. This includes not only mainstream media such as mass media and online media, but also individuals who disseminate information. These actors play a role in transforming institutional issues into social issues.
-2. Communization: Communities formed by individuals who recognize avant-garde issues, regardless of whether they are formal or informal. These communities play a role in transforming underlying issues into social issues.
-3. Culture art revitalization: Activities that present social issues made visible through art (as social critique) in the form of artworks and communicate them to the public. These activities serve to transform avant-garde issues into values held by individuals.
+1. Media: Media that reveal the institutional shortcomings of modern society. This includes not only mainstream media such as mass media and online media, but also individuals who disseminate information. Converting system into social issues.
+2. Communization: Communities formed by individuals who recognize avant-garde issues, regardless of whether they are formal or informal. Converting avant-garde social issues into social issues.
+3. Culture art revitalization: Activities that present social issues made visible through art (as social Critism) in the form of artworks and communicate them to the public. Converting avant-garde social issues into human's value.
 4. Standardization: Standardization of systems that is carried out to influence a wider range of stakeholders within the system. Converting systems into technology and resources.
-5. Communication: Communication means for conveying social issues to more people. For example, in recent years this is often done through social media. Converting social issues into people's value systems.
-6. Organization: Organizations formed to solve social issues. This includes all organizations tackling newly emerged social problems, regardless of whether they have legal status or are new or established organizations. Converting social issues into technology and resources.
-7. Meaning-making: The reason people use products and services based on their values. Converting people's values into everyday spaces and user experiences.
-8. Products and Services: Products and services created using the technology and resources possessed by an organization. Converting technology and resources into everyday spaces and user experiences.
-9. Habituation: Habits that people perform based on their values. Converting values into systems.
-10. Paradigm: Something that serves as a dominant technology or resource of an era and has influence on the next generation. Converting technology and resources into avant-garde issues.
-11. Business Ecosystem: A network formed by stakeholders involved in products and services that constitute and maintain everyday spaces and user experiences. Converting everyday spaces and user experiences into systems.
-12. Art (Social Critique): A person's belief that views problems that people are unaware of from a subjective/intrinsic perspective. It has the role of feeling discomfort with everyday spaces and user experiences and presenting problems. Converting everyday spaces and user experiences into avant-garde issues.
+5. Communication: Communication means for conveying social issues to more people. For example, in recent years this is often done through social media. Converting social issues into human's value.
+6. Organization: Organizations formed to solve social issues. This includes all organizations tackling newly emerged social problems, regardless of whether they have legal status or are new or established organizations. Converting social issues into NEWLY EVOLVED technology and resources.
+7. Meaning-making: The reason people use products and services based on their values. Converting human's values into NEW user experiences.
+8. Products and Services: Products and services created using the technology and resources possessed by an organization. Converting technology and resources into user experiences.
+9. Habituation: Habits that people perform based on their values. Converting human's values into systems.
+10. Paradigm: Something that serves as a dominant technology or resource of an era and has influence on the next generation. Converting technology and resources into avant-garde social issues.
+11. Business Ecosystem: A network formed by stakeholders involved in products and services that constitute and maintain everyday spaces and user experiences. Converting user experiences into systems.
+12. Art (Social Critism): A person's belief that views problems that people are unaware of from a subjective/intrinsic perspective. It has the role of feeling discomfort with everyday spaces and user experiences and presenting problems. Converting user experiences into avant-garde social issues.
 """
 
 def generate_description(product, user_experience, avant_garde_issue):
