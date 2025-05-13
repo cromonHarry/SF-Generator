@@ -478,7 +478,7 @@ if st.session_state.page == "visualization":
         collapsible_visualization()
     if st.button("⬅ Back to Main App"):
         st.session_state.page = "main"
-        st.experimental_rerun()
+        st.rerun()
     st.stop()
 
 # ========== Main Page ==========
@@ -1147,7 +1147,7 @@ if st.session_state.generated:
     # Add button to switch to visualization page
     if st.button("🔎 Visualize AP Model", type="secondary"):
         st.session_state.page = "visualization"
-        st.experimental_rerun()
+        st.rerun()
 
     
     # Reset button
