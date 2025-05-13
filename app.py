@@ -1143,6 +1143,12 @@ if st.session_state.generated:
                 mime="image/png",
                 key=f"download_stage{i+1}"
             )
+
+    # Add button to switch to visualization page
+    if st.button("🔎 Visualize AP Model", type="secondary"):
+        st.session_state.page = "visualization"
+        st.experimental_rerun()
+
     
     # Reset button
     if st.button("🔄 Generate New Story", type="primary"):
