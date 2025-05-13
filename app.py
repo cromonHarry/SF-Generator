@@ -260,7 +260,7 @@ if st.session_state.page == "visualization":
         """)
         
         # Load AP model data
-        ap_data = load_ap_data("background_history.json")
+        ap_data = st.session_state.bg_history
         
         # Stage selection in sidebar
         st.sidebar.header("Settings")
