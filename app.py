@@ -1,3 +1,501 @@
+
+# ============================
+# Integrated Near Future SF Generator + AP Model Visualization
+# Single-file Streamlit app
+# ============================
+
+import streamlit as st
+import base64
+from openai import OpenAI
+from PIL import Image
+import json
+import io
+import os
+import time
+import re
+import networkx as nx
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+import pandas as pd
+
+# ========== Multi-page setup ==========
+if 'page' not in st.session_state:
+    st.session_state.page = "main"
+
+# ========== Visualization Page ==========
+if st.session_state.page == "visualization":
+    import streamlit as st
+    import os
+    import sys
+    import networkx as nx
+    import json
+    import re
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
+    from matplotlib.lines import Line2D
+    import io
+    from PIL import Image
+    import pandas as pd
+    from io import BytesIO
+    import base64
+    
+    # Set page config
+    st.set_page_config(page_title="AP Model Visualization", layout="wide")
+    
+    def load_ap_data(json_file_path):
+        """Load AP model data from a JSON file"""
+        try:
+            with open(json_file_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            st.error(f"Error loading data: {e}")
+            
+    def parse_ap_model_data(raw_content):
+        """Parse AP model content into structured data"""
+        result = {
+            "objects": {},
+            "paths": {}
+        }
+        
+        # Parse objects section
+        objects_match = re.search(r'### Objects([\s\S]*?)(?=### Paths|$)', raw_content)
+        if objects_match:
+            objects_text = objects_match.group(1)
+            object_matches = re.finditer(r'\d+\.\s+\*\*(.*?)\*\*:\s+([\s\S]*?)(?=\d+\.\s+\*\*|$)', objects_text)
+            for match in object_matches:
+                name, description = match.groups()
+                result["objects"][name.strip()] = description.strip()
+        
+        # Parse paths section
+        paths_match = re.search(r'### Paths([\s\S]*?)$', raw_content)
+        if paths_match:
+            paths_text = paths_match.group(1)
+            path_matches = re.finditer(r'\d+\.\s+\*\*(.*?)\*\*:\s+([\s\S]*?)(?=\d+\.\s+\*\*|$)', paths_text)
+            for match in path_matches:
+                name, description = match.groups()
+                result["paths"][name.strip()] = description.strip()
+        
+        return result
+    
+    def create_ap_graph(stage):
+        """Create a directed graph for the AP model with predefined connections for the specific stage"""
+        G = nx.DiGraph()
+        
+        # Add nodes (Objects in AP model)
+        objects = [
+            "Technology and resource",
+            "User experiences",
+            "System",
+            "Avant-garde social issues",
+            "Social Issue",
+            "Human's value"
+        ]
+        
+        # Add all regular nodes
+        for obj in objects:
+            G.add_node(obj, generation=stage+1)
+        
+        # For stage 1 and 2, add a next-generation technology node
+        if stage < 2:  # Only for stage 1 and 2
+            # The next generation number is current stage + 2
+            # (e.g., stage 0 (Step 1) -> generation 2, stage 1 (Step 2) -> generation 3)
+            G.add_node("Next Technology", generation=stage+2)
+        
+        # Add edges with their labels (Paths in AP model)
+        # Format: (source, target, {label: path_name, dashed: True/False})
+        edges = [
+            ("Technology and resource", "User experiences", {"label": "Products and Services", "dashed": False}),
+            ("Technology and resource", "Avant-garde social issues", {"label": "Paradigm", "dashed": False}),
+            ("User experiences", "System", {"label": "Business Ecosystem", "dashed": False}),
+            ("User experiences", "Avant-garde social issues", {"label": "Art (Social Critique)", "dashed": True}),
+            ("System", "Social Issue", {"label": "Media", "dashed": True}),
+            ("Avant-garde social issues", "Human's value", {"label": "Culture art revitalization", "dashed": False}),
+            ("Avant-garde social issues", "Social Issue", {"label": "Communization", "dashed": False}),
+            ("Social Issue", "Human's value", {"label": "Communication", "dashed": False}),
+        ]
+        
+        # Add connections to the next generation Technology node for stages 1 and 2
+        if stage < 2:  # Only for stage 1 and 2
+            edges.extend([
+                ("Social Issue", "Next Technology", {"label": "Organization", "dashed": False}),
+                ("System", "Next Technology", {"label": "Standardization", "dashed": True}),
+            ])
+        
+        for source, target, attr in edges:
+            G.add_edge(source, target, **attr)
+        
+        return G
+    
+    def visualize_ap_graph(G, stage_data, stage, highlight_node=None):
+        """Create a visualization of the AP model graph with optional node highlighting"""
+        # Set up the figure
+        plt.figure(figsize=(14, 8))
+        
+        # Define node positions manually for a clear layout
+        pos = {
+            "Technology and resource": (0.2, 0.35),
+            "User experiences": (0.4, 0.55),
+            "Avant-garde social issues": (0.6, 0.35),
+            "System": (0.6, 0.75),
+            "Social Issue": (0.8, 0.55),
+            "Human's value": (1.0, 0.35),
+            "Next Technology": (1.0, 0.75)  # Position for next generation technology
+        }
+        
+        # Define node colors
+        node_colors = {
+            "Avant-garde social issues": "lightcoral",
+            "Human's value": "yellow",
+            "Social Issue": "lightyellow",
+            "Technology and resource": "lightgreen",
+            "User experiences": "lightblue",
+            "System": "skyblue",
+            "Next Technology": "lightgreen"  # Same color as Technology
+        }
+        
+        # Draw nodes with custom labels
+        for node in G.nodes():
+            if node == highlight_node:
+                # Highlight the selected node
+                nx.draw_networkx_nodes(
+                    G, pos, 
+                    nodelist=[node], 
+                    node_color=node_colors.get(node, "gray"), 
+                    node_size=1500,  # Smaller size to avoid overlap
+                    alpha=1.0,       # Full opacity
+                    edgecolors='red',
+                    linewidths=3     # Thicker border
+                )
+            else:
+                nx.draw_networkx_nodes(
+                    G, pos, 
+                    nodelist=[node], 
+                    node_color=node_colors.get(node, "gray"), 
+                    node_size=1200,  # Smaller size to avoid overlap
+                    alpha=0.8,
+                    edgecolors='black'
+                )
+        
+        # Draw edges with larger arrows
+        solid_edges = [(u, v) for u, v, d in G.edges(data=True) if not d.get('dashed', False)]
+        dashed_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('dashed', False)]
+        
+        nx.draw_networkx_edges(G, pos, edgelist=solid_edges, width=1.5, arrows=True, arrowsize=25, connectionstyle='arc3,rad=0.1')
+        nx.draw_networkx_edges(G, pos, edgelist=dashed_edges, width=1.5, style='dashed', arrows=True, arrowsize=25, connectionstyle='arc3,rad=0.1')
+        
+        # Intelligently position labels based on node position
+        label_pos = {}
+        for node, (x, y) in pos.items():
+            # Position labels around the nodes instead of all below
+            if y < 0.5:  # For nodes in the bottom row
+                label_pos[node] = (x, y + 0.03)  # Place labels above
+            else:
+                label_pos[node] = (x, y - 0.03)  # Place labels below
+        
+        # Modify labels for Next Technology node
+        node_labels = {n: n for n in G.nodes()}
+        if "Next Technology" in node_labels:
+            # Change label to show it's the next generation
+            stage_num = G.nodes["Next Technology"]["generation"]
+            node_labels["Next Technology"] = f"Technology\n(Stage {stage_num})"
+        
+        nx.draw_networkx_labels(G, label_pos, labels=node_labels, font_size=10, font_weight='bold',
+                               bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=0.3))
+        
+        # Draw edge labels with adjustments to avoid overlap
+        edge_labels = {(u, v): d.get('label', '') for u, v, d in G.edges(data=True)}
+        nx.draw_networkx_edge_labels(
+            G, pos, 
+            edge_labels=edge_labels, 
+            font_size=9,
+            font_color='navy',
+            bbox=dict(alpha=0.7, pad=0.1, facecolor='white'),
+            rotate=False,
+            label_pos=0.6  # Position labels away from the nodes
+        )
+        
+        # Add legend for edge types
+        solid_line = Line2D([0], [0], color='black', linewidth=1.5, label='No time difference')
+        dashed_line = Line2D([0], [0], color='black', linewidth=1.5, linestyle='--', label='Past to future')
+        plt.legend(handles=[solid_line, dashed_line], loc='upper left')
+        
+        # Add title to indicate the stage
+        plt.title(f"AP Model - Stage {stage+1}", fontsize=16, pad=20)
+        
+        plt.axis('off')
+        plt.tight_layout()
+        
+        # Convert the figure to an image
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+        buf.seek(0)
+        img = Image.open(buf)
+        
+        return img
+    
+    def get_next_stage_content(stage, node, ap_data):
+        """Get content from the next stage's data"""
+        if stage+1 < len(ap_data):
+            next_stage_data = parse_ap_model_data(ap_data[stage+1]["background"])
+            return next_stage_data["objects"].get(node, "Content not available for next stage")
+        return "Next stage data not available"
+    
+    def get_connections(node, G, path_descriptions):
+        """Get incoming and outgoing connections for a specific node with path descriptions"""
+        incoming = []
+        outgoing = []
+        
+        for u, v, data in G.in_edges(node, data=True):
+            path_name = data.get("label", "Unknown")
+            incoming.append({
+                "from": u,
+                "path": path_name,
+                "description": path_descriptions.get(path_name, "No description available"),
+                "dashed": data.get("dashed", False)
+            })
+        
+        for u, v, data in G.out_edges(node, data=True):
+            path_name = data.get("label", "Unknown")
+            outgoing.append({
+                "to": v,
+                "path": path_name,
+                "description": path_descriptions.get(path_name, "No description available"),
+                "dashed": data.get("dashed", False)
+            })
+        
+        return incoming, outgoing
+    
+    def collapsible_visualization():
+        """Create a collapsible visualization of the AP model"""
+        st.title("🚀 Archaeological Prototyping Model Visualization")
+        st.markdown("""
+        This application visualizes the Archaeological Prototyping (AP) model across three evolutionary stages.
+        Click on any node in the graph to expand and see its detailed content.
+        """)
+        
+        # Load AP model data
+        ap_data = load_ap_data("background_history.json")
+        
+        # Stage selection in sidebar
+        st.sidebar.header("Settings")
+        stage = st.sidebar.radio(
+            "Select Evolution Stage:",
+            ["Stage 1: Ferment Period", "Stage 2: Take-off Period", "Stage 3: Maturity Period"],
+            index=0
+        )
+        
+        # Map stage selection to data index
+        stage_map = {
+            "Stage 1: Ferment Period": 0,
+            "Stage 2: Take-off Period": 1,
+            "Stage 3: Maturity Period": 2
+        }
+        
+        # Get current stage data
+        stage_index = stage_map[stage]
+        current_stage_data = parse_ap_model_data(ap_data[stage_index]["background"])
+        
+        # Create AP model graph for the specific stage
+        G = create_ap_graph(stage_index)
+        
+        # Safely check for node existence and reset selection if needed when changing stages
+        if 'selected_node' in st.session_state:
+            # If we're in stage 3 and had Next Technology selected
+            if stage_index == 2 and st.session_state.selected_node == "Next Technology":
+                # Reset selection since this node doesn't exist in stage 3
+                st.session_state.selected_node = None
+                st.info("Selected node is not available in this stage. Please select another node.")
+        
+        # Interactive visualization with collapsible nodes
+        st.subheader(f"AP Model - {stage}")
+        
+        # Display custom instructions based on stage
+        if stage_index < 2:  # Stages 1 and 2
+            st.markdown(f"""
+            **Instructions:**
+            - Click on any node to view its detailed content 
+            - Solid lines: transformations without time difference
+            - Dashed lines: transformations with time difference (past to future)
+            - The "Technology (Stage {stage_index+2})" node represents the next stage's technology
+            """)
+        else:  # Stage 3
+            st.markdown("""
+            **Instructions:**
+            - Click on any node to view its detailed content 
+            - Solid lines: transformations without time difference
+            - Dashed lines: transformations with time difference (past to future)
+            """)
+        
+        # Create columns for the graph and node selection
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            # Keep track of which node is selected
+            selected_node = st.session_state.get('selected_node', None)
+            
+            # Display the graph with the selected node highlighted
+            graph_image = visualize_ap_graph(G, current_stage_data, stage_index, selected_node)
+            st.image(graph_image, use_container_width=True)
+        
+        with col2:
+            # Node selector buttons - more visual than a dropdown
+            st.markdown("### Select a Node")
+            
+            # Node color indicators
+            node_colors = {
+                "Technology and resource": "#90EE90",  # lightgreen
+                "User experiences": "#ADD8E6",  # lightblue
+                "System": "#87CEEB",  # skyblue
+                "Avant-garde social issues": "#F08080",  # lightcoral
+                "Social Issue": "#F0E68C",  # khaki
+                "Human's value": "#FFFF00",  # yellow
+                "Next Technology": "#90EE90"  # same as Technology
+            }
+            
+            # Create styled buttons for each node
+            for node in G.nodes():
+                # For Next Technology, change the display name
+                display_name = node
+                if node == "Next Technology":
+                    generation = G.nodes[node]["generation"]
+                    display_name = f"Technology (Stage {generation})"
+                    
+                if st.button(
+                    display_name,
+                    key=f"btn_{node}",
+                    help=f"View details for {display_name}",
+                    use_container_width=True,
+                    type="primary" if selected_node == node else "secondary"
+                ):
+                    st.session_state['selected_node'] = node
+                    st.rerun()
+        
+        # If a node is selected, show its details in a collapsible section
+        if selected_node and selected_node in G.nodes():
+            # For Next Technology node, get content from the next stage's Technology node
+            node_content = ""
+            if selected_node == "Next Technology":
+                generation = G.nodes[selected_node]["generation"]
+                if generation-1 < len(ap_data):
+                    next_stage_data = parse_ap_model_data(ap_data[generation-1]["background"])
+                    node_content = next_stage_data["objects"].get("Technology and resource", "Content not available for next stage")
+            else:
+                node_content = current_stage_data["objects"].get(selected_node, "No content available")
+                
+            # Display the node name (adjust for Next Technology)
+            display_name = selected_node
+            if selected_node == "Next Technology":
+                generation = G.nodes[selected_node]["generation"]
+                display_name = f"Technology and resource (Stage {generation})"
+                
+            st.markdown(f"### Details for: {display_name}")
+            
+            # Create tabs for different types of information
+            tab1, tab2, tab3 = st.tabs(["Content", "Connections", "Evolution"])
+            
+            # Tab 1: Node Content
+            with tab1:
+                st.markdown(node_content)
+            
+            # Tab 2: Connections with path descriptions
+            with tab2:
+                # Get path descriptions from current stage
+                path_descriptions = current_stage_data["paths"]
+                
+                # Get connections with path descriptions
+                incoming, outgoing = get_connections(selected_node, G, path_descriptions)
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("#### Incoming Connections")
+                    if incoming:
+                        for conn in incoming:
+                            with st.expander(f"From **{conn['from']}** via *{conn['path']}*"):
+                                st.markdown(f"**Time relation:** {'Past to Future' if conn['dashed'] else 'No time difference'}")
+                                st.markdown(f"**Path description:** {conn['description']}")
+                    else:
+                        st.markdown("*No incoming connections*")
+                
+                with col2:
+                    st.markdown("#### Outgoing Connections")
+                    if outgoing:
+                        for conn in outgoing:
+                            with st.expander(f"To **{conn['to']}** via *{conn['path']}*"):
+                                st.markdown(f"**Time relation:** {'Past to Future' if conn['dashed'] else 'No time difference'}")
+                                st.markdown(f"**Path description:** {conn['description']}")
+                    else:
+                        st.markdown("*No outgoing connections*")
+            
+            # Tab 3: Evolution across stages
+            with tab3:
+                st.markdown("#### Evolution Across Stages")
+                
+                # Handle special case for Next Technology node
+                if selected_node == "Next Technology":
+                    generation = G.nodes[selected_node]["generation"]
+                    evolution_data = []
+                    
+                    # Only show the relevant stage
+                    stage_name = f"Stage {generation}: {'Take-off' if generation == 2 else 'Maturity'} Period"
+                    if generation-1 < len(ap_data):
+                        stage_parsed = parse_ap_model_data(ap_data[generation-1]["background"])
+                        evolution_data.append({
+                            "Stage": stage_name,
+                            "Content": stage_parsed["objects"].get("Technology and resource", "N/A")
+                        })
+                    
+                    for row in evolution_data:
+                        with st.expander(row["Stage"], expanded=True):
+                            st.markdown(row["Content"])
+                else:
+                    # Regular node - show all stages
+                    evolution_data = []
+                    for i, stage_name in enumerate(["Stage 1: Ferment Period", "Stage 2: Take-off Period", "Stage 3: Maturity Period"]):
+                        stage_parsed = parse_ap_model_data(ap_data[i]["background"])
+                        evolution_data.append({
+                            "Stage": stage_name,
+                            "Content": stage_parsed["objects"].get(selected_node, "N/A")
+                        })
+                    
+                    for i, row in enumerate(evolution_data):
+                        with st.expander(row["Stage"], expanded=(i == stage_index)):
+                            st.markdown(row["Content"])
+        
+        # Path information section
+        with st.expander("View All Paths", expanded=False):
+            st.markdown(f"### Paths in AP Model - {stage}")
+            
+            # Display paths information in a more visual way
+            paths_df = pd.DataFrame([
+                {"Path Name": path_name, "Description": path_desc}
+                for path_name, path_desc in current_stage_data["paths"].items()
+            ])
+            
+            # Use Streamlit's built-in dataframe display
+            st.dataframe(
+                paths_df,
+                column_config={
+                    "Path Name": st.column_config.TextColumn("Path Name", width="medium"),
+                    "Description": st.column_config.TextColumn("Description", width="large")
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+    
+    # Run the app
+    if __name__ == "__main__":
+        # Initialize session state
+        if 'selected_node' not in st.session_state:
+            st.session_state['selected_node'] = None
+        
+        collapsible_visualization()
+    if st.button("⬅ Back to Main App"):
+        st.session_state.page = "main"
+        st.experimental_rerun()
+    st.stop()
+
+# ========== Main Page ==========
 import streamlit as st
 import base64
 from openai import OpenAI
@@ -710,5 +1208,9 @@ else:
             st.info("Demo image will be displayed when the demo is generated.")
 
 # Sidebar footer
+st.sidebar.markdown("---")
+st.sidebar.markdown("Made with ❤️ using Streamlit")
+
+# ========== Sidebar footer ==========
 st.sidebar.markdown("---")
 st.sidebar.markdown("Made with ❤️ using Streamlit")
