@@ -37,31 +37,32 @@ if st.session_state.page == "visualization":
             st.error(f"Error loading data: {e}")
             
     def parse_ap_model_data(raw_content):
-        """Parse AP model content into structured data"""
-        result = {
-            "objects": {},
-            "paths": {}
-        }
+        result = {"objects": {}, "paths": {}}
         
-        # Parse objects section
-        objects_match = re.search(r'### Objects([\s\S]*?)(?=### Paths|$)', raw_content)
+        # Parse objects
+        objects_match = re.search(r'### Objects\\s*([\\s\\S]*?)(?=### Paths|$)', raw_content)
         if objects_match:
-            objects_text = objects_match.group(1)
-            object_matches = re.finditer(r'\d+\.\s+\*\*(.*?)\*\*:\s+([\s\S]*?)(?=\d+\.\s+\*\*|$)', objects_text)
-            for match in object_matches:
-                name, description = match.groups()
-                result["objects"][name.strip()] = description.strip()
+            objects_text = objects_match.group(1).strip()
+            object_blocks = re.split(r'\\n(?=\\d+\\.\\s+\\*\\*)', objects_text)
+            for block in object_blocks:
+                match = re.match(r'\\d+\\.\\s+\\*\\*(.*?)\\*\\*:\\s+(.*)', block, re.DOTALL)
+                if match:
+                    name, description = match.groups()
+                    result["objects"][name.strip()] = description.strip()
         
-        # Parse paths section
-        paths_match = re.search(r'### Paths([\s\S]*?)$', raw_content)
+        # Parse paths
+        paths_match = re.search(r'### Paths\\s*([\\s\\S]*?)$', raw_content)
         if paths_match:
-            paths_text = paths_match.group(1)
-            path_matches = re.finditer(r'\d+\.\s+\*\*(.*?)\*\*:\s+([\s\S]*?)(?=\d+\.\s+\*\*|$)', paths_text)
-            for match in path_matches:
-                name, description = match.groups()
-                result["paths"][name.strip()] = description.strip()
+            paths_text = paths_match.group(1).strip()
+            path_blocks = re.split(r'\\n(?=\\d+\\.\\s+\\*\\*)', paths_text)
+            for block in path_blocks:
+                match = re.match(r'\\d+\\.\\s+\\*\\*(.*?)\\*\\*:\\s+(.*)', block, re.DOTALL)
+                if match:
+                    name, description = match.groups()
+                    result["paths"][name.strip()] = description.strip()
         
         return result
+
     
     def create_ap_graph(stage):
         """Create a directed graph for the AP model with predefined connections for the specific stage"""
