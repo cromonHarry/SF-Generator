@@ -40,23 +40,23 @@ if st.session_state.page == "visualization":
         result = {"objects": {}, "paths": {}}
         
         # Parse objects
-        objects_match = re.search(r'### Objects\\s*([\\s\\S]*?)(?=### Paths|$)', raw_content)
+        objects_match = re.search(r'### Objects\s*([\s\S]*?)(?=### Paths|$)', raw_content)
         if objects_match:
             objects_text = objects_match.group(1).strip()
-            object_blocks = re.split(r'\\n(?=\\d+\\.\\s+\\*\\*)', objects_text)
+            object_blocks = re.split(r'\n(?=\d+\. \*\*)', objects_text)
             for block in object_blocks:
-                match = re.match(r'\\d+\\.\\s+\\*\\*(.*?)\\*\\*:\\s+(.*)', block, re.DOTALL)
+                match = re.match(r'\d+\. \*\*(.*?)\*\*:\s+([\s\S]*)', block.strip())
                 if match:
                     name, description = match.groups()
                     result["objects"][name.strip()] = description.strip()
         
         # Parse paths
-        paths_match = re.search(r'### Paths\\s*([\\s\\S]*?)$', raw_content)
+        paths_match = re.search(r'### Paths\s*([\s\S]*?)$', raw_content)
         if paths_match:
             paths_text = paths_match.group(1).strip()
-            path_blocks = re.split(r'\\n(?=\\d+\\.\\s+\\*\\*)', paths_text)
+            path_blocks = re.split(r'\n(?=\d+\. \*\*)', paths_text)
             for block in path_blocks:
-                match = re.match(r'\\d+\\.\\s+\\*\\*(.*?)\\*\\*:\\s+(.*)', block, re.DOTALL)
+                match = re.match(r'\d+\. \*\*(.*?)\*\*:\s+([\s\S]*)', block.strip())
                 if match:
                     name, description = match.groups()
                     result["paths"][name.strip()] = description.strip()
