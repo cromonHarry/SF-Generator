@@ -604,7 +604,7 @@ You can also consider it as a directed graph, with 6 vertices:(Avant-garde socia
 5. User experiences: A physical space composed of products and services developed through the mobilization of technologies and resources. Within this space, users assign meaning to these products and services based on human's values, and engage in experiences through their use. The relationship between values and user experience can be illustrated, for example, by people who hold the value of "wanting to become an AI engineer" interpreting a PC as "a tool for learning programming" and thereby engaging in the experience of "programming."
 6. System: Systems created to facilitate the routines practiced by human who hold certain values, as well as systems established to enable stakeholders involved in businesses that shape everyday spaces and user experiences (i.e., the business ecosystem) to operate more smoothly. Specifically, these include laws, guidelines, industry standards, administrative guidance, and moral codes.
 
-##The 12 paths are:
+##The 12 paths are below, please pay attention that for each path, it's better to think about an example.
 1. Media: Media that reveal the institutional shortcomings of modern society. This includes not only mainstream media such as mass media and online media, but also individuals who disseminate information. Converting system into social issues.
 2. Communization: Communities formed by individuals who recognize avant-garde issues, regardless of whether they are formal or informal. Converting avant-garde social issues into social issues.
 3. Culture art revitalization: Activities that present social issues made visible through art (as social Critism) in the form of artworks and communicate them to the public. Converting avant-garde social issues into human's value.
@@ -1147,7 +1147,7 @@ if st.session_state.generated:
             )
 
     # Add button to switch to visualization page
-    if st.button("🔎 Visualize AP Model", type="secondary"):
+    if st.button("🔎 Visualize AP Model", type="primary"):
         st.session_state.page = "visualization"
         st.rerun()
 
