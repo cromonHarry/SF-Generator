@@ -37,29 +37,34 @@ if st.session_state.page == "visualization":
             st.error(f"Error loading data: {e}")
             
     def parse_ap_model_data(raw_content):
+        """Parse AP model data from raw content string"""
         result = {"objects": {}, "paths": {}}
         
-        # Parse objects
-        objects_match = re.search(r'### Objects\s*([\s\S]*?)(?=### Paths|$)', raw_content)
-        if objects_match:
-            objects_text = objects_match.group(1).strip()
-            object_blocks = re.split(r'\n(?=\d+\. \*\*)', objects_text)
-            for block in object_blocks:
-                match = re.match(r'\d+\. \*\*(.*?)\*\*:\s+([\s\S]*)', block.strip())
-                if match:
-                    name, description = match.groups()
-                    result["objects"][name.strip()] = description.strip()
+        # Define known objects and paths for categorization
+        known_objects = [
+            "Avant-garde social issues", 
+            "Human's value", 
+            "Social Issue", 
+            "Technology and resource", 
+            "User experiences", 
+            "System"
+        ]
         
-        # Parse paths
-        paths_match = re.search(r'### Paths\s*([\s\S]*?)$', raw_content)
-        if paths_match:
-            paths_text = paths_match.group(1).strip()
-            path_blocks = re.split(r'\n(?=\d+\. \*\*)', paths_text)
-            for block in path_blocks:
-                match = re.match(r'\d+\. \*\*(.*?)\*\*:\s+([\s\S]*)', block.strip())
-                if match:
-                    name, description = match.groups()
-                    result["paths"][name.strip()] = description.strip()
+        # Extract all items in the format: number. **name**: description
+        pattern = r'\d+\.\s+\*\*(.*?)\*\*:\s+([\s\S]*?)(?=\n\d+\.\s+\*\*|$)'
+        matches = re.finditer(pattern, raw_content)
+        
+        for match in matches:
+            name, description = match.groups()
+            name = name.strip()
+            description = description.strip()
+            
+            # Categorize into objects or paths based on known lists
+            if name in known_objects:
+                result["objects"][name] = description
+            else:
+                # If not in objects list, treat as a path
+                result["paths"][name] = description
         
         return result
 
