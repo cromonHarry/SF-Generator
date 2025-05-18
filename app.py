@@ -633,7 +633,10 @@ def build_background(product, user_experience, avant_garde_issue):
 Here are some information about the {product}:
 ##Positive feedback: {user_experience}
 ##Negative feedback: {avant_garde_issue}
-Please analyze and generate the all objects and paths in AP model based on the given information. Only output the objects and paths. And as I mentioned, imagine 1 example situation for each path. Let's think step by step.
+Please analyze and generate the all objects and paths in AP model based on the given information. And as I mentioned, imagine 1 example situation for each path.
+The output format should be like:
+1. **Object or path**: Description
+Only output objects and paths. Let's think step by step.
 """
 
 def update_description(product, description_history, bg_history, initial_description, step):
@@ -669,7 +672,10 @@ def update_background(product, background, description):
 Here is the evolution step of {product} and the related information based on AP model:
 {background}
 Now move to next step, and the {product} has evolved. The new description of it is {description}.
-Please generate the new background of {product} based on AP model. Imagine if problems are solved? How do them solved? Are there any new problems are realized? Only output the objects and paths. And as I mentioned, imagine 1 example situation for each path. Let's think step by step.
+Please generate the new background of {product} based on AP model. Imagine if problems are solved? How do them solved? Are there any new problems are realized? And as I mentioned, imagine 1 example situation for each path.
+The output format should be like:
+1. **Object or path**: Description
+Only output objects and paths. Let's think step by step.
 """
 
 def generate_story(product, bg_history, description_history):
