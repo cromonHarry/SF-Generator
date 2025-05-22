@@ -1,4 +1,3 @@
-
 # ============================
 # Integrated Near Future SF Generator + AP Model Visualization
 # Single-file Streamlit app
@@ -515,10 +514,14 @@ if 'description_history' not in st.session_state:
     st.session_state.description_history = []
 if 'story' not in st.session_state:
     st.session_state.story = ""
+if 'story_direct' not in st.session_state:
+    st.session_state.story_direct = ""
 if 'image_data' not in st.session_state:
     st.session_state.image_data = []
 if 'cover_image_data' not in st.session_state:
     st.session_state.cover_image_data = None
+if 'cover_image_data_direct' not in st.session_state:
+    st.session_state.cover_image_data_direct = None
 if 'demo_clicked' not in st.session_state:
     st.session_state.demo_clicked = False
 
@@ -696,6 +699,12 @@ Here is the background settings based on AP model in 3 development steps:
 Your story should be no more than 500 words.
 """
 
+def generate_story_direct(product, user_experience, avant_garde_issue):
+    return f"""Now you need to generate an interesting short science fiction. The topic is about {product}. Here is the description of this product:
+##Positive feedback: {user_experience}
+##Negative feedback: {avant_garde_issue}
+Your story should be around 500 words."""
+
 def generate_image_edit_prompt(product, next_description, step):
     """Generate prompt for image editing based on the evolution stage"""
     stage_names = {
@@ -757,7 +766,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         
         prompt = generate_description(product, user_experience, avant_garde_issue)
         completion = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
                 {
                     "role": "user",
@@ -777,7 +786,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
 
         prompt = update_description(product, bg_history, description_history, initial_description, 0)
         completion = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "user", "content": prompt}
             ]
@@ -797,7 +806,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         
         user_prompt = build_background(product, user_experience, avant_garde_issue)
         completion = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {
@@ -866,7 +875,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         
         prompt = update_description(product, description_history, bg_history, initial_description, 1)
         completion = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
@@ -917,7 +926,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         
         prompt = update_background(product, bg_history[0]['background'], second_description)
         completion = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
@@ -949,7 +958,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         
         prompt = update_description(product, description_history, bg_history, initial_description, 2)
         completion = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
@@ -1000,7 +1009,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         
         prompt = update_background(product, bg_history[1]['background'], third_description)
         completion = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
@@ -1027,12 +1036,39 @@ if generate_button and product and user_experience and avant_garde_issue and upl
             st.image(stage3_image, caption=f"{product} - Maturity Period", use_container_width=True)
     
     with final_container:
-        # Generate science fiction story
-        status_text.text("⏳ Creating science fiction story... This may take a moment.")
+        # Generate direct story first
+        status_text.text("⏳ Creating direct story for comparison... This may take a moment.")
+        
+        story_direct_prompt = generate_story_direct(product, user_experience, avant_garde_issue)
+        completion_direct = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "user", "content": story_direct_prompt}
+            ]
+        )
+        story_direct = completion_direct.choices[0].message.content
+        
+        progress_bar.progress(0.87)
+        
+        # Generate direct story cover
+        status_text.text("Generating direct story cover... This may take a moment.")
+        
+        cover_img_direct = client.images.generate(
+            model="gpt-image-1",
+            prompt=f"Draw a cover for the short story about {product}: {story_direct}",
+            quality="low"
+        )
+        cover_image_bytes_direct = base64.b64decode(cover_img_direct.data[0].b64_json)
+        cover_image_direct = Image.open(io.BytesIO(cover_image_bytes_direct))
+        
+        progress_bar.progress(0.9)
+        
+        # Generate AP-based science fiction story
+        status_text.text("⏳ Creating AP model-based story... This may take a moment.")
         
         story_prompt = generate_story(product, bg_history, description_history)
         completion = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": story_prompt}
@@ -1040,10 +1076,10 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         )
         story = completion.choices[0].message.content
         
-        progress_bar.progress(0.9)
+        progress_bar.progress(0.95)
         
-        # Generate story cover
-        status_text.text("Generating story cover... This may take a moment.")
+        # Generate AP-based story cover
+        status_text.text("Generating AP-based story cover... This may take a moment.")
         
         cover_img = client.images.generate(
             model="gpt-image-1",
@@ -1063,8 +1099,10 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         st.session_state.bg_history = bg_history
         st.session_state.description_history = description_history
         st.session_state.story = story
+        st.session_state.story_direct = story_direct
         st.session_state.image_data = [get_image_bytes(img) for img in image_history]
         st.session_state.cover_image_data = get_image_bytes(cover_image)
+        st.session_state.cover_image_data_direct = get_image_bytes(cover_image_direct)
         st.session_state.product = product
         st.session_state.generated = True
         
@@ -1092,14 +1130,26 @@ if st.session_state.generated:
             with st.expander(f"View Stage {i+1} Description"):
                 st.markdown(st.session_state.description_history[i]['description'])
     
-    # Display story and cover
-    st.subheader("📚 Science Fiction Story")
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        st.image(io.BytesIO(st.session_state.cover_image_data), caption="Story Cover", use_container_width=True)
-    with col2:
-        st.markdown("**Story Text:**")
-        st.markdown(st.session_state.story)
+    # Display story and cover comparison
+    st.subheader("📚 Science Fiction Stories Comparison")
+    
+    # AP-based Story
+    with st.expander("🔬 AP Model-Based Story", expanded=True):
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.image(io.BytesIO(st.session_state.cover_image_data), caption="AP-Based Story Cover", use_container_width=True)
+        with col2:
+            st.markdown("**Story Text (Generated using Archaeological Prototyping Model):**")
+            st.markdown(st.session_state.story)
+    
+    # Direct Story
+    with st.expander("⚡ Direct Story", expanded=False):
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.image(io.BytesIO(st.session_state.cover_image_data_direct), caption="Direct Story Cover", use_container_width=True)
+        with col2:
+            st.markdown("**Story Text (Generated directly from inputs):**")
+            st.markdown(st.session_state.story_direct)
     
     # Download buttons
     st.subheader("Download Options")
@@ -1116,11 +1166,11 @@ if st.session_state.generated:
             key="download_bg_json"
         )
         
-        # Download story
+        # Download AP-based story
         st.download_button(
-            label="📥 Download Story",
+            label="📥 Download AP Story",
             data=st.session_state.story,
-            file_name="story.txt",
+            file_name="ap_story.txt",
             mime="text/plain",
             key="download_story"
         )
@@ -1136,13 +1186,31 @@ if st.session_state.generated:
             key="download_desc_json"
         )
         
-        # Download cover image
+        # Download AP-based cover image
         st.download_button(
-            label="📥 Download Cover Image",
+            label="📥 Download AP Cover Image",
             data=st.session_state.cover_image_data,
-            file_name="cover.png",
+            file_name="ap_cover.png",
             mime="image/png",
             key="download_cover"
+        )
+        
+        # Download direct story
+        st.download_button(
+            label="📥 Download Direct Story",
+            data=st.session_state.story_direct,
+            file_name="direct_story.txt",
+            mime="text/plain",
+            key="download_story_direct"
+        )
+        
+        # Download direct cover image
+        st.download_button(
+            label="📥 Download Direct Cover Image",
+            data=st.session_state.cover_image_data_direct,
+            file_name="direct_cover.png",
+            mime="image/png",
+            key="download_cover_direct"
         )
     
     with col3:
@@ -1170,8 +1238,10 @@ if st.session_state.generated:
         st.session_state.bg_history = []
         st.session_state.description_history = []
         st.session_state.story = ""
+        st.session_state.story_direct = ""
         st.session_state.image_data = []
         st.session_state.cover_image_data = None
+        st.session_state.cover_image_data_direct = None
         st.session_state.demo_clicked = False
         st.rerun()
 
