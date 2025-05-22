@@ -15,7 +15,6 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import pandas as pd
-from PIL import Image
 
 # ========== Multi-page setup ==========
 if 'page' not in st.session_state:
@@ -487,14 +486,6 @@ if st.session_state.page == "visualization":
     st.stop()
 
 # ========== Main Page ==========
-import streamlit as st
-import base64
-from openai import OpenAI
-from PIL import Image
-import json
-import io
-import os
-import time
 
 client = OpenAI(api_key=st.secrets["openai"]["api_key"])
 
@@ -766,7 +757,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         
         prompt = generate_description(product, user_experience, avant_garde_issue)
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {
                     "role": "user",
@@ -786,7 +777,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
 
         prompt = update_description(product, bg_history, description_history, initial_description, 0)
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "user", "content": prompt}
             ]
@@ -806,7 +797,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         
         user_prompt = build_background(product, user_experience, avant_garde_issue)
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {
@@ -875,7 +866,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         
         prompt = update_description(product, description_history, bg_history, initial_description, 1)
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
@@ -926,7 +917,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         
         prompt = update_background(product, bg_history[0]['background'], second_description)
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
@@ -958,7 +949,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         
         prompt = update_description(product, description_history, bg_history, initial_description, 2)
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
@@ -1009,7 +1000,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         
         prompt = update_background(product, bg_history[1]['background'], third_description)
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
@@ -1041,7 +1032,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         
         story_direct_prompt = generate_story_direct(product, user_experience, avant_garde_issue)
         completion_direct = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "user", "content": story_direct_prompt}
             ]
@@ -1068,7 +1059,7 @@ if generate_button and product and user_experience and avant_garde_issue and upl
         
         story_prompt = generate_story(product, bg_history, description_history)
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": story_prompt}
@@ -1251,13 +1242,14 @@ else:
     st.markdown("""
     1. Fill in the left panel input fields:
        - Product Name
-       - User Experience Description
-       - Avant-garde Issue (potential problems)
+       - Positive feedback
+       - Potential problem
     2. Upload a product image
     3. Click "Generate Story" button
     4. Wait for processing to complete and download results
     
     **Or simply click the "Generate Demo" button in the sidebar to try with the smartphone example!**
+    **However, our budget is not enough, so please do not try too many times.**
     """)
     
     # Show example
