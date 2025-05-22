@@ -299,22 +299,6 @@ if st.session_state.page == "visualization":
         # Interactive visualization with collapsible nodes
         st.subheader(f"AP Model - {stage}")
         
-        # Display custom instructions based on stage
-        if stage_index < 2:  # Stages 1 and 2
-            st.markdown(f"""
-            **Instructions:**
-            - Click on any node to view its detailed content 
-            - Solid lines: transformations without time difference
-            - Dashed lines: transformations with time difference (past to future)
-            - The "Technology (Stage {stage_index+2})" node represents the next stage's technology
-            """)
-        else:  # Stage 3
-            st.markdown("""
-            **Instructions:**
-            - Click on any node to view its detailed content 
-            - Solid lines: transformations without time difference
-            - Dashed lines: transformations with time difference (past to future)
-            """)
         
         # Create columns for the graph and node selection
         col1, col2 = st.columns([3, 1])
@@ -1276,8 +1260,8 @@ else:
 
 # Sidebar footer
 st.sidebar.markdown("---")
-st.sidebar.markdown("Made with ❤️ using Streamlit")
+st.sidebar.markdown("Made by Zhang Menghan using Streamlit")
 
 # ========== Sidebar footer ==========
 st.sidebar.markdown("---")
-st.sidebar.markdown("Made with ❤️ using Streamlit")
+st.sidebar.markdown("Made by Zhang Menghan using Streamlit")
