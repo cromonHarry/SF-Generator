@@ -56,6 +56,31 @@ This is a **Streamlit-based application** that helps users generate a **3-steps 
 3. **Issue**: Over-dependence, privacy risks  
 ➡️ Generates an original story imagining future impacts.
 
+
+## 📝 Evaluation
+
+To test the quality of AP-based generated story, we also asked LLM to directly generate a short story only based on user input, and we designed 2 methods to evaluate. The samples are stored in `samples` folder.
+
+1. **Benchmark Evaluation**:
+   You can check it by runing:
+   ```
+   pip install nltk textstat
+   python benchmark_eval.py
+   ```
+
+2. **LLM Evaluation**:
+   We evaluate the results by using grok-3 and qwen3-4b. So you should use your own grok api key and download LM Studio for qwen3-4b.
+   You can check it by runing:
+   ```
+   python llm_eval.py
+   ```
+
+## 📄 Acknowledgments
+
+- [Streamlit](https://streamlit.io/)
+- [OpenAI](https://openai.com/)
+- [S-Curve Model](https://en.wikipedia.org/wiki/S-curve)
+
 ## 📜 License
 
 MIT License
