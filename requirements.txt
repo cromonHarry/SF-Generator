@@ -5,4 +5,3 @@ pydantic==2.9.2
 networkx==3.2.1
 matplotlib==3.9.2
 pandas==2.2.2
-wikipedia
