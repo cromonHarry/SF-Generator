@@ -1,1267 +1,608 @@
-# ============================
-# Integrated Near Future SF Generator + AP Model Visualization
-# Single-file Streamlit app
-# ============================
+# =======================================================
+# Enhanced SF Generator - Demonstration Specialized Version (Auto-Execution)
+# =======================================================
 import streamlit as st
-import base64
-from openai import OpenAI
-from PIL import Image
 import json
-import io
-import os
-import time
 import re
-import networkx as nx
-import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-import pandas as pd
+import time
+from openai import OpenAI
+from tavily import TavilyClient
+import concurrent.futures
 
-# ========== Multi-page setup ==========
-if 'page' not in st.session_state:
-    st.session_state.page = "main"
+# ========== Page Setup ==========
+st.set_page_config(page_title="Near-Future SF Generator", layout="wide")
 
-# ========== Visualization Page ==========
-if st.session_state.page == "visualization":
-    
-    # Set page config
-    st.set_page_config(page_title="AP Model Visualization", layout="wide")
-    
-    def load_ap_data(json_file_path):
-        """Load AP model data from a JSON file"""
-        try:
-            with open(json_file_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            st.error(f"Error loading data: {e}")
-            
-    def parse_ap_model_data(raw_content):
-        """Parse AP model data from raw content string"""
-        result = {"objects": {}, "paths": {}}
-        
-        # Define known objects and paths for categorization
-        known_objects = [
-            "Avant-garde social issues", 
-            "Human's value", 
-            "Social Issue", 
-            "Technology and resource", 
-            "User experiences", 
-            "System"
-        ]
-        
-        # Extract all items in the format: number. **name**: description
-        pattern = r'\d+\.\s+\*\*(.*?)\*\*:\s+([\s\S]*?)(?=\n\d+\.\s+\*\*|$)'
-        matches = re.finditer(pattern, raw_content)
-        
-        for match in matches:
-            name, description = match.groups()
-            name = name.strip()
-            description = description.strip()
-            
-            # Categorize into objects or paths based on known lists
-            if name in known_objects:
-                result["objects"][name] = description
-            else:
-                # If not in objects list, treat as a path
-                result["paths"][name] = description
-        
-        return result
-
-    
-    def create_ap_graph(stage):
-        """Create a directed graph for the AP model with predefined connections for the specific stage"""
-        G = nx.DiGraph()
-        
-        # Add nodes (Objects in AP model)
-        objects = [
-            "Technology and resource",
-            "User experiences",
-            "System",
-            "Avant-garde social issues",
-            "Social Issue",
-            "Human's value"
-        ]
-        
-        # Add all regular nodes
-        for obj in objects:
-            G.add_node(obj, generation=stage+1)
-        
-        # For stage 1 and 2, add a next-generation technology node
-        if stage < 2:  # Only for stage 1 and 2
-            # The next generation number is current stage + 2
-            # (e.g., stage 0 (Step 1) -> generation 2, stage 1 (Step 2) -> generation 3)
-            G.add_node("Next Technology", generation=stage+2)
-        
-        # Add edges with their labels (Paths in AP model)
-        # Format: (source, target, {label: path_name, dashed: True/False})
-        edges = [
-            ("Technology and resource", "User experiences", {"label": "Products and Services", "dashed": False}),
-            ("Technology and resource", "Avant-garde social issues", {"label": "Paradigm", "dashed": False}),
-            ("User experiences", "System", {"label": "Business Ecosystem", "dashed": False}),
-            ("User experiences", "Avant-garde social issues", {"label": "Art (Social Critism)", "dashed": True}),
-            ("System", "Social Issue", {"label": "Media", "dashed": True}),
-            ("Avant-garde social issues", "Human's value", {"label": "Culture art revitalization", "dashed": False}),
-            ("Avant-garde social issues", "Social Issue", {"label": "Communization", "dashed": False}),
-            ("Social Issue", "Human's value", {"label": "Communication", "dashed": False}),
-        ]
-        
-        # Add connections to the next generation Technology node for stages 1 and 2
-        if stage < 2:  # Only for stage 1 and 2
-            edges.extend([
-                ("Social Issue", "Next Technology", {"label": "Organization", "dashed": False}),
-                ("System", "Next Technology", {"label": "Standardization", "dashed": True}),
-            ])
-        
-        for source, target, attr in edges:
-            G.add_edge(source, target, **attr)
-        
-        return G
-    
-    def visualize_ap_graph(G, stage_data, stage, highlight_node=None):
-        """Create a visualization of the AP model graph with optional node highlighting"""
-        # Set up the figure
-        plt.figure(figsize=(14, 8))
-        
-        # Define node positions manually for a clear layout
-        pos = {
-            "Technology and resource": (0.2, 0.35),
-            "User experiences": (0.4, 0.55),
-            "Avant-garde social issues": (0.6, 0.35),
-            "System": (0.6, 0.75),
-            "Social Issue": (0.8, 0.55),
-            "Human's value": (1.0, 0.35),
-            "Next Technology": (1.0, 0.75)  # Position for next generation technology
-        }
-        
-        # Define node colors
-        node_colors = {
-            "Avant-garde social issues": "lightcoral",
-            "Human's value": "yellow",
-            "Social Issue": "lightyellow",
-            "Technology and resource": "lightgreen",
-            "User experiences": "lightblue",
-            "System": "skyblue",
-            "Next Technology": "lightgreen"  # Same color as Technology
-        }
-        
-        # Draw nodes with custom labels
-        for node in G.nodes():
-            if node == highlight_node:
-                # Highlight the selected node
-                nx.draw_networkx_nodes(
-                    G, pos, 
-                    nodelist=[node], 
-                    node_color=node_colors.get(node, "gray"), 
-                    node_size=1500,  # Smaller size to avoid overlap
-                    alpha=1.0,       # Full opacity
-                    edgecolors='red',
-                    linewidths=3     # Thicker border
-                )
-            else:
-                nx.draw_networkx_nodes(
-                    G, pos, 
-                    nodelist=[node], 
-                    node_color=node_colors.get(node, "gray"), 
-                    node_size=1200,  # Smaller size to avoid overlap
-                    alpha=0.8,
-                    edgecolors='black'
-                )
-        
-        # Draw edges with larger arrows
-        solid_edges = [(u, v) for u, v, d in G.edges(data=True) if not d.get('dashed', False)]
-        dashed_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('dashed', False)]
-        
-        nx.draw_networkx_edges(G, pos, edgelist=solid_edges, width=1.5, arrows=True, arrowsize=25, connectionstyle='arc3,rad=0.1')
-        nx.draw_networkx_edges(G, pos, edgelist=dashed_edges, width=1.5, style='dashed', arrows=True, arrowsize=25, connectionstyle='arc3,rad=0.1')
-        
-        # Intelligently position labels based on node position
-        label_pos = {}
-        for node, (x, y) in pos.items():
-            # Position labels around the nodes instead of all below
-            if y < 0.5:  # For nodes in the bottom row
-                label_pos[node] = (x, y + 0.03)  # Place labels above
-            else:
-                label_pos[node] = (x, y - 0.03)  # Place labels below
-        
-        # Modify labels for Next Technology node
-        node_labels = {n: n for n in G.nodes()}
-        if "Next Technology" in node_labels:
-            # Change label to show it's the next generation
-            stage_num = G.nodes["Next Technology"]["generation"]
-            node_labels["Next Technology"] = f"Technology\n(Stage {stage_num})"
-        
-        nx.draw_networkx_labels(G, label_pos, labels=node_labels, font_size=10, font_weight='bold',
-                               bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=0.3))
-        
-        # Draw edge labels with adjustments to avoid overlap
-        edge_labels = {(u, v): d.get('label', '') for u, v, d in G.edges(data=True)}
-        nx.draw_networkx_edge_labels(
-            G, pos, 
-            edge_labels=edge_labels, 
-            font_size=9,
-            font_color='navy',
-            bbox=dict(alpha=0.7, pad=0.1, facecolor='white'),
-            rotate=False,
-            label_pos=0.6  # Position labels away from the nodes
-        )
-        
-        # Add legend for edge types
-        solid_line = Line2D([0], [0], color='black', linewidth=1.5, label='No time difference')
-        dashed_line = Line2D([0], [0], color='black', linewidth=1.5, linestyle='--', label='Past to future')
-        plt.legend(handles=[solid_line, dashed_line], loc='upper left')
-        
-        # Add title to indicate the stage
-        plt.title(f"AP Model - Stage {stage+1}", fontsize=16, pad=20)
-        
-        plt.axis('off')
-        plt.tight_layout()
-        
-        # Convert the figure to an image
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
-        buf.seek(0)
-        img = Image.open(buf)
-        
-        return img
-    
-    def get_next_stage_content(stage, node, ap_data):
-        """Get content from the next stage's data"""
-        if stage+1 < len(ap_data):
-            next_stage_data = parse_ap_model_data(ap_data[stage+1]["background"])
-            return next_stage_data["objects"].get(node, "Content not available for next stage")
-        return "Next stage data not available"
-    
-    def get_connections(node, G, path_descriptions):
-        """Get incoming and outgoing connections for a specific node with path descriptions"""
-        incoming = []
-        outgoing = []
-        
-        for u, v, data in G.in_edges(node, data=True):
-            path_name = data.get("label", "Unknown")
-            incoming.append({
-                "from": u,
-                "path": path_name,
-                "description": path_descriptions.get(path_name, "No description available"),
-                "dashed": data.get("dashed", False)
-            })
-        
-        for u, v, data in G.out_edges(node, data=True):
-            path_name = data.get("label", "Unknown")
-            outgoing.append({
-                "to": v,
-                "path": path_name,
-                "description": path_descriptions.get(path_name, "No description available"),
-                "dashed": data.get("dashed", False)
-            })
-        
-        return incoming, outgoing
-    
-    def collapsible_visualization():
-        """Create a collapsible visualization of the AP model"""
-        st.title("🚀 Archaeological Prototyping Model Visualization")
-        st.markdown("""
-        This application visualizes the Archaeological Prototyping (AP) model across three evolutionary stages.
-        Click on any node in the graph to expand and see its detailed content.
-        """)
-        
-        # Load AP model data
-        ap_data = st.session_state.bg_history
-        
-        # Stage selection in sidebar
-        st.sidebar.header("Settings")
-        stage = st.sidebar.radio(
-            "Select Evolution Stage:",
-            ["Stage 1: Ferment Period", "Stage 2: Take-off Period", "Stage 3: Maturity Period"],
-            index=0
-        )
-        
-        # Map stage selection to data index
-        stage_map = {
-            "Stage 1: Ferment Period": 0,
-            "Stage 2: Take-off Period": 1,
-            "Stage 3: Maturity Period": 2
-        }
-        
-        # Get current stage data
-        stage_index = stage_map[stage]
-        current_stage_data = parse_ap_model_data(ap_data[stage_index]["background"])
-        
-        # Create AP model graph for the specific stage
-        G = create_ap_graph(stage_index)
-        
-        # Safely check for node existence and reset selection if needed when changing stages
-        if 'selected_node' in st.session_state:
-            # If we're in stage 3 and had Next Technology selected
-            if stage_index == 2 and st.session_state.selected_node == "Next Technology":
-                # Reset selection since this node doesn't exist in stage 3
-                st.session_state.selected_node = None
-                st.info("Selected node is not available in this stage. Please select another node.")
-        
-        # Interactive visualization with collapsible nodes
-        st.subheader(f"AP Model - {stage}")
-        
-        
-        # Create columns for the graph and node selection
-        col1, col2 = st.columns([3, 1])
-        
-        with col1:
-            # Keep track of which node is selected
-            selected_node = st.session_state.get('selected_node', None)
-            
-            # Display the graph with the selected node highlighted
-            graph_image = visualize_ap_graph(G, current_stage_data, stage_index, selected_node)
-            st.image(graph_image, use_container_width=True)
-        
-        with col2:
-            # Node selector buttons - more visual than a dropdown
-            st.markdown("### Select a Node")
-            
-            # Node color indicators
-            node_colors = {
-                "Technology and resource": "#90EE90",  # lightgreen
-                "User experiences": "#ADD8E6",  # lightblue
-                "System": "#87CEEB",  # skyblue
-                "Avant-garde social issues": "#F08080",  # lightcoral
-                "Social Issue": "#F0E68C",  # khaki
-                "Human's value": "#FFFF00",  # yellow
-                "Next Technology": "#90EE90"  # same as Technology
-            }
-            
-            # Create styled buttons for each node
-            for node in G.nodes():
-                # For Next Technology, change the display name
-                display_name = node
-                if node == "Next Technology":
-                    generation = G.nodes[node]["generation"]
-                    display_name = f"Technology (Stage {generation})"
-                    
-                if st.button(
-                    display_name,
-                    key=f"btn_{node}",
-                    help=f"View details for {display_name}",
-                    use_container_width=True,
-                    type="primary" if selected_node == node else "secondary"
-                ):
-                    st.session_state['selected_node'] = node
-                    st.rerun()
-        
-        # If a node is selected, show its details in a collapsible section
-        if selected_node and selected_node in G.nodes():
-            # For Next Technology node, get content from the next stage's Technology node
-            node_content = ""
-            if selected_node == "Next Technology":
-                generation = G.nodes[selected_node]["generation"]
-                if generation-1 < len(ap_data):
-                    next_stage_data = parse_ap_model_data(ap_data[generation-1]["background"])
-                    node_content = next_stage_data["objects"].get("Technology and resource", "Content not available for next stage")
-            else:
-                node_content = current_stage_data["objects"].get(selected_node, "No content available")
-                
-            # Display the node name (adjust for Next Technology)
-            display_name = selected_node
-            if selected_node == "Next Technology":
-                generation = G.nodes[selected_node]["generation"]
-                display_name = f"Technology and resource (Stage {generation})"
-                
-            st.markdown(f"### Details for: {display_name}")
-            
-            # Create tabs for different types of information
-            tab1, tab2, tab3 = st.tabs(["Content", "Connections", "Evolution"])
-            
-            # Tab 1: Node Content
-            with tab1:
-                st.markdown(node_content)
-            
-            # Tab 2: Connections with path descriptions
-            with tab2:
-                # Get path descriptions from current stage
-                path_descriptions = current_stage_data["paths"]
-                
-                # Get connections with path descriptions
-                incoming, outgoing = get_connections(selected_node, G, path_descriptions)
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown("#### Incoming Connections")
-                    if incoming:
-                        for conn in incoming:
-                            with st.expander(f"From **{conn['from']}** via *{conn['path']}*"):
-                                st.markdown(f"**Time relation:** {'Past to Future' if conn['dashed'] else 'No time difference'}")
-                                st.markdown(f"**Path description:** {conn['description']}")
-                    else:
-                        st.markdown("*No incoming connections*")
-                
-                with col2:
-                    st.markdown("#### Outgoing Connections")
-                    if outgoing:
-                        for conn in outgoing:
-                            with st.expander(f"To **{conn['to']}** via *{conn['path']}*"):
-                                st.markdown(f"**Time relation:** {'Past to Future' if conn['dashed'] else 'No time difference'}")
-                                st.markdown(f"**Path description:** {conn['description']}")
-                    else:
-                        st.markdown("*No outgoing connections*")
-            
-            # Tab 3: Evolution across stages
-            with tab3:
-                st.markdown("#### Evolution Across Stages")
-                
-                # Handle special case for Next Technology node
-                if selected_node == "Next Technology":
-                    generation = G.nodes[selected_node]["generation"]
-                    evolution_data = []
-                    
-                    # Only show the relevant stage
-                    stage_name = f"Stage {generation}: {'Take-off' if generation == 2 else 'Maturity'} Period"
-                    if generation-1 < len(ap_data):
-                        stage_parsed = parse_ap_model_data(ap_data[generation-1]["background"])
-                        evolution_data.append({
-                            "Stage": stage_name,
-                            "Content": stage_parsed["objects"].get("Technology and resource", "N/A")
-                        })
-                    
-                    for row in evolution_data:
-                        with st.expander(row["Stage"], expanded=True):
-                            st.markdown(row["Content"])
-                else:
-                    # Regular node - show all stages
-                    evolution_data = []
-                    for i, stage_name in enumerate(["Stage 1: Ferment Period", "Stage 2: Take-off Period", "Stage 3: Maturity Period"]):
-                        stage_parsed = parse_ap_model_data(ap_data[i]["background"])
-                        evolution_data.append({
-                            "Stage": stage_name,
-                            "Content": stage_parsed["objects"].get(selected_node, "N/A")
-                        })
-                    
-                    for i, row in enumerate(evolution_data):
-                        with st.expander(row["Stage"], expanded=(i == stage_index)):
-                            st.markdown(row["Content"])
-        
-        # Path information section
-        with st.expander("View All Paths", expanded=False):
-            st.markdown(f"### Paths in AP Model - {stage}")
-            
-            # Display paths information in a more visual way
-            paths_df = pd.DataFrame([
-                {"Path Name": path_name, "Description": path_desc}
-                for path_name, path_desc in current_stage_data["paths"].items()
-            ])
-            
-            # Use Streamlit's built-in dataframe display
-            st.dataframe(
-                paths_df,
-                column_config={
-                    "Path Name": st.column_config.TextColumn("Path Name", width="medium"),
-                    "Description": st.column_config.TextColumn("Description", width="large")
-                },
-                use_container_width=True,
-                hide_index=True
-            )
-    
-    # Run the app
-    if __name__ == "__main__":
-        # Initialize session state
-        if 'selected_node' not in st.session_state:
-            st.session_state['selected_node'] = None
-        
-        collapsible_visualization()
-    if st.button("⬅ Back to Main App"):
-        st.session_state.page = "main"
-        st.rerun()
+# ========== Client Initialization ==========
+try:
+    client = OpenAI(api_key=st.secrets["openai"]["api_key"])
+    tavily_client = TavilyClient(api_key=st.secrets["tavily"]["api_key"])
+except Exception:
+    st.error("❌ API keys are not configured. Please add `openai` and `tavily` API keys to Streamlit Secrets.")
     st.stop()
 
-# ========== Main Page ==========
 
-client = OpenAI(api_key=st.secrets["openai"]["api_key"])
+# ========== System Prompt & Constants ==========
+SYSTEM_PROMPT = """You are a science fiction expert who analyzes society based on the "Archaeological Prototyping (AP)" model. Here is an introduction to this model:
 
-# Title and description
-st.title("🚀 Near Future SF Generator")
-st.markdown("""
-This application generates a 3-stage evolutionary timeline and science fiction story based on the technology product you're interested in.
-Please upload a product image and fill in the relevant information.
-""")
+AP is a sociocultural model consisting of 18 items (6 objects and 12 arrows). In essence, it is a model that divides society and culture into 18 elements around a specific theme and logically describes their connections.
 
-# Initialize session state to store generated data
-if 'generated' not in st.session_state:
-    st.session_state.generated = False
-if 'bg_history' not in st.session_state:
-    st.session_state.bg_history = []
-if 'description_history' not in st.session_state:
-    st.session_state.description_history = []
-if 'story' not in st.session_state:
-    st.session_state.story = ""
-if 'story_direct' not in st.session_state:
-    st.session_state.story_direct = ""
-if 'image_data' not in st.session_state:
-    st.session_state.image_data = []
-if 'cover_image_data' not in st.session_state:
-    st.session_state.cover_image_data = None
-if 'cover_image_data_direct' not in st.session_state:
-    st.session_state.cover_image_data_direct = None
-if 'demo_clicked' not in st.session_state:
-    st.session_state.demo_clicked = False
+This model can also be considered as a directed graph. It consists of 6 objects (Avant-garde Social Issues, People's Values, Social Issues, Technology and Resources, Daily Spaces and User Experience, Institutions) and 12 arrows (Media, Community Formation, Cultural Arts Promotion, Standardization, Communication, Organization, Meaning Attribution, Products/Services, Habituation, Paradigm, Business Ecosystem, Art (Social Criticism)) that constitute a generational sociocultural model. The connections between these objects and arrows are defined as follows:
 
-# Sidebar for inputs
-with st.sidebar:
-    st.header("Input Information")
-    
-    # Add demo button at the top of sidebar
-    st.info("Limited API usage available. Try the demo first!")
-    demo_button = st.button("🎮 Generate Demo", help="Click this to show the example story about smartphone", type="primary")
-    
-    if demo_button:
-        st.session_state.demo_clicked = True
-    
-    # Product input
-    product = st.text_input("Tell me your interest product.", 
-                           value="Smartphone" if st.session_state.demo_clicked else "",
-                           placeholder="e.g., Smartphone")
-    
-    # User experience input
-    user_experience = st.text_area("Why do you think this product is good?", 
-                                  value="It allows me talk with my parents from anywhere in the world." if st.session_state.demo_clicked else "",
-                                  placeholder="e.g., It allows me talk with my parents from anywhere in the world.",
-                                  height=100)
-    
-    # Avant-garde issue input
-    avant_garde_issue = st.text_area("Is there any problem that you think is not good enough?", 
-                                    value="People spend too much time on it." if st.session_state.demo_clicked else "",
-                                    placeholder="e.g., People spend too much time on it.",
-                                    height=100)
-    
-    # Image upload
-    uploaded_file = st.file_uploader("Upload Product Image", type=['png', 'jpg', 'jpeg'])
-    
-    # Load demo image when demo button is clicked
-    if st.session_state.demo_clicked and not uploaded_file:
-        try:
-            # Try to open the demo image from the root directory
-            demo_image = open("smartphone_demo.png", "rb")
-            uploaded_file = demo_image
-        except FileNotFoundError:
-            st.error("Demo image not found. Please upload an image manually.")
-    
-    # Generate button
-    generate_button = st.button("🔮 Generate Story", type="primary")
-    
-    # Auto-click generate button if demo mode is active and all fields are filled
-    if st.session_state.demo_clicked and product and user_experience and avant_garde_issue and uploaded_file and not st.session_state.generated:
-        generate_button = True
+##Objects
+1. Avant-garde Social Issues: Social issues caused by paradigms of technology and resources, or social issues that emerge through Art (Social Criticism) regarding daily living spaces and user experiences within them.
+2. People's Values: The desired state of people who empathize with avant-garde social issues spread through cultural arts promotion or social issues that cannot be addressed by institutions spread through daily communication. These issues are not recognized by everyone, but only by certain progressive/minority people. Specifically, this includes macro environmental issues (climate, ecology, etc.) and human environmental issues (ethics, economics, hygiene, etc.).
+3. Social Issues: Social issues recognized by society through progressive communities addressing avant-garde issues, or social issues constrained by institutions exposed through media. These emerge as targets that should be solved in society.
+4. Technology and Resources: Among the institutions created to smoothly function daily routines, these are technologies and resources that are standardized and constrained by the past, and technologies and resources possessed by organizations (for-profit and non-profit corporations, including groups without legal status, regardless of new or existing) organized to solve social issues.
+5. Daily Spaces and User Experience: Physical spaces composed of products and services developed by mobilizing technology and resources, and user experiences of using those products and services with meaning attribution based on certain values in those spaces. The relationship between values and user experience is, for example, people with the value "want to become an AI engineer" give meaning to PCs as "tools for learning programming" and have the experience of "programming."
+6. Institutions: Institutions created to more smoothly carry out habits that people with certain values perform daily, or institutions created by stakeholders (business ecosystem) who conduct business composing daily spaces and user experiences to conduct business more smoothly. Specifically, this includes laws, guidelines, industry standards, administrative guidance, and morals.
 
-# Helper functions
-def resize_image(img):
-    max_size = 500
-    width, height = img.size
-    
-    if width > max_size or height > max_size:
-        scale = min(max_size / width, max_size / height)
-        new_size = (int(width * scale), int(height * scale))
-        img = img.resize(new_size, Image.Resampling.LANCZOS)
-    return img
+##Arrows
+1. Media: Media that reveals contemporary institutional defects. Includes major media such as mass media and internet media, as well as individuals who disseminate information. Converts institutions to social issues. (Institutions -> Social Issues)
+2. Community Formation: Communities formed by people who recognize avant-garde issues. Whether official or unofficial does not matter. Converts avant-garde social issues to social issues. (Avant-garde Social Issues -> Social Issues)
+3. Cultural Arts Promotion: Activities that exhibit and convey social issues revealed by Art (Social Criticism) as works to people. Converts avant-garde social issues to people's values. (Avant-garde Social Issues -> People's Values)
+4. Standardization: Among institutions, standardization of institutions conducted to affect a broader range of stakeholders. Converts institutions to new technology and resources. (Institutions -> Technology and Resources)
+5. Communication: Communication means to convey social issues to more people. For example, this is often done through SNS in recent years. Converts social issues to people's values. (Social Issues -> People's Values)
+6. Organization: Organizations formed to solve social issues. Regardless of whether they have legal status or are new or old organizations, all organizations that address newly emerged social issues. Converts social issues to new technology and resources. (Social Issues -> Technology and Resources)
+7. Meaning Attribution: Reasons why people use products and services based on their values. Converts people's values to new daily spaces and user experiences. (People's Values -> Daily Spaces and User Experience)
+8. Products/Services: Products and services created using technology and resources possessed by organizations. Converts technology and resources to daily spaces and user experiences. (Technology and Resources -> Daily Spaces and User Experience)
+9. Habituation: Habits that people perform based on their values. Converts people's values to institutions. (People's Values -> Institutions)
+10. Paradigm: As dominant technology and resources of an era, these bring influence to the next generation. Converts technology and resources to avant-garde social issues. (Technology and Resources -> Avant-garde Social Issues)
+11. Business Ecosystem: Networks formed by stakeholders related to products and services that compose daily spaces and user experiences to maintain them. Converts daily spaces and user experiences to institutions. (Daily Spaces and User Experience -> Institutions)
+12. Art (Social Criticism): Beliefs of people who view issues that people don't notice from subjective/intrinsic perspectives. Has the role of feeling discomfort with daily spaces and user experiences and presenting issues. Converts daily spaces and user experiences to avant-garde social issues. (Daily Spaces and User Experience -> Avant-garde Social Issues)
 
-def encode_image(img):
-    buffered = io.BytesIO()
-    img.save(buffered, format="PNG")
-    return base64.b64encode(buffered.getvalue()).decode("utf-8")
-
-def save_temp_image(img):
-    """Save a PIL Image to a temporary file and return the file path"""
-    temp_file = "temp_image.png"
-    img.save(temp_file, format="PNG")
-    return temp_file
-
-def get_image_bytes(pil_img):
-    """Convert PIL image to bytes for download button"""
-    buffered = io.BytesIO()
-    pil_img.save(buffered, format="PNG")
-    return buffered.getvalue()
-
-# Prompts from your code
-SYSTEM_PROMPT = """You are an expert of science fictionist. You analyze the society based on the Archaeological Prototyping(AP) model. Here is the introduction about this model:
-AP is a sociocultural model composed of 18 items (6 objects and 12 paths). In essence, it's a model that divides society and culture into these 18 elements and logically depicts their connections.
-You can also consider it as a directed graph, with 6 vertices:(Avant-garde social issues, Human's value, Social Issue, Technology and resource, User experiences, System) and 12 arcs:(Media, Communization, Culture, Standardization, Communication, Organization, Meaning-making, Products and Services, Habituation, Paradigm, Business Ecosystem, Art (Social Critism)). The connections between these vertices and arcs will be shown in the following descriptions.
-##The 6 objects are:
-1. Avant-garde social issues: Social issues caused by paradigms of technology and resources, and the everyday spaces and user experiences shaped by them, are made visible through art (social critisim).
-2. Human's value: The desired state of people who empathize with avant-garde social issues disseminated through cultural and artistic promotion, as well as with social issues that cannot be addressed by existing systems and are spread through everyday communication. These issues are not recognized by everyone, but only by a certain group of progressive or minority individuals. Specifically, they include macro-level environmental issues (such as climate and ecology) and human-centered environmental issues (such as ethics, economics, and public health).
-3. Social Issue: Social issues that are brought to public awareness by progressive communities tackling avant-garde problems, as well as systemic issues exposed through the media. These issues become visible as targets that society must address.
-4. Technology and resource: Technologies and resources that have been standardized and constrained by the past, created to ensure the smooth functioning of everyday routines. These include those held by organizations—whether for-profit, non-profit, incorporated, or unincorporated, new or existing—that are structured to solve social issues.
-5. User experiences: A physical space composed of products and services developed through the mobilization of technologies and resources. Within this space, users assign meaning to these products and services based on human's values, and engage in experiences through their use. The relationship between values and user experience can be illustrated, for example, by people who hold the value of "wanting to become an AI engineer" interpreting a PC as "a tool for learning programming" and thereby engaging in the experience of "programming."
-6. System: Systems created to facilitate the routines practiced by human who hold certain values, as well as systems established to enable stakeholders involved in businesses that shape everyday spaces and user experiences (i.e., the business ecosystem) to operate more smoothly. Specifically, these include laws, guidelines, industry standards, administrative guidance, and moral codes.
-
-##The 12 paths are below, please pay attention that for each path, it's better to think about an example.
-1. Media: Media that reveal the institutional shortcomings of modern society. This includes not only mainstream media such as mass media and online media, but also individuals who disseminate information. Converting system into social issues.
-2. Communization: Communities formed by individuals who recognize avant-garde issues, regardless of whether they are formal or informal. Converting avant-garde social issues into social issues.
-3. Culture art revitalization: Activities that present social issues made visible through art (as social Critism) in the form of artworks and communicate them to the public. Converting avant-garde social issues into human's value.
-4. Standardization: Standardization of systems that is carried out to influence a wider range of stakeholders within the system. Converting systems into technology and resources.
-5. Communication: Communication means for conveying social issues to more people. For example, in recent years this is often done through social media. Converting social issues into human's value.
-6. Organization: Organizations formed to solve social issues. This includes all organizations tackling newly emerged social problems, regardless of whether they have legal status or are new or established organizations. Converting social issues into NEWLY EVOLVED technology and resources.
-7. Meaning-making: The reason people use products and services based on their values. Converting human's values into NEW user experiences.
-8. Products and Services: Products and services created using the technology and resources possessed by an organization. Converting technology and resources into user experiences.
-9. Habituation: Habits that people perform based on their values. Converting human's values into systems.
-10. Paradigm: Something that serves as a dominant technology or resource of an era and has influence on the next generation. Converting technology and resources into avant-garde social issues.
-11. Business Ecosystem: A network formed by stakeholders involved in products and services that constitute and maintain everyday spaces and user experiences. Converting user experiences into systems.
-12. Art (Social Critism): A person's belief that views problems that people are unaware of from a subjective/intrinsic perspective. It has the role of feeling discomfort with everyday spaces and user experiences and presenting problems. Converting user experiences into avant-garde social issues.
+###The S-curve is a model representing the evolution of technology over time. It consists of the following three stages:
+##Stage 1: Ferment Period: In this stage, technological development progresses steadily, but its progress is gradual. Focus is mainly on solving existing problems and improving current functions. At the end of this period, current problems are solved while new problems emerge.
+##Stage 2: Take-off Period: In this stage, technology enters a rapid growth period. Various innovative ideas are proposed, and they eventually combine to create completely new forms of technology. At the end of this period, technology achieves great development while also causing new problems.
+##Stage 3: Maturity Period: In this stage, technological development becomes gradual again. While solving problems that occurred in the previous period, technology evolves into a more stable and mature state.
 """
 
-def generate_description(product, user_experience, avant_garde_issue):
-    return f"""
-Here are some information about the {product}:
-##Positive feedback: {user_experience}
-##Negative feedback: {avant_garde_issue}
-Here is an related example image. Please generate a description of this product, such as appearance or function. Less than 100 words.
+AP_MODEL_STRUCTURE = {
+    "objects": {
+        "Avant-garde Social Issues": "Social issues caused by paradigms of technology and resources",
+        "People's Values": "Values and ideals recognized by progressive people",
+        "Social Issues": "Issues recognized and to be solved in society",
+        "Technology and Resources": "Technology and resources organized for problem solving",
+        "Daily Spaces and User Experience": "Physical spaces and user experiences through products/services",
+        "Institutions": "Systems and rules that facilitate habits and business"
+    },
+    "arrows": {
+        "Media": {"from": "Institutions", "to": "Social Issues", "description": "Media exposing institutional defects"},
+        "Community Formation": {"from": "Avant-garde Social Issues", "to": "Social Issues", "description": "Communities addressing avant-garde issues"},
+        "Cultural Arts Promotion": {"from": "Avant-garde Social Issues", "to": "People's Values", "description": "Exhibition and transmission of issues through art"},
+        "Standardization": {"from": "Institutions", "to": "Technology and Resources", "description": "Standardization of institutions into technology/resources"},
+        "Communication": {"from": "Social Issues", "to": "People's Values", "description": "Issue transmission via SNS etc."},
+        "Organization": {"from": "Social Issues", "to": "Technology and Resources", "description": "Formation of organizations for problem solving"},
+        "Meaning Attribution": {"from": "People's Values", "to": "Daily Spaces and User Experience", "description": "Reasons for using products/services based on values"},
+        "Products/Services": {"from": "Technology and Resources", "to": "Daily Spaces and User Experience", "description": "Creation of products/services using technology"},
+        "Habituation": {"from": "People's Values", "to": "Institutions", "description": "Institutionalization of habits based on values"},
+        "Paradigm": {"from": "Technology and Resources", "to": "Avant-garde Social Issues", "description": "New social issues from dominant technology"},
+        "Business Ecosystem": {"from": "Daily Spaces and User Experience", "to": "Institutions", "description": "Networks of business stakeholders"},
+        "Art (Social Criticism)": {"from": "Daily Spaces and User Experience", "to": "Avant-garde Social Issues", "description": "Presenting issues from discomfort with daily life"}
+    }
+}
+
+
+# ========== Helper Functions ==========
+def parse_json_response(gpt_output: str) -> dict:
+    result_str = gpt_output.strip()
+    if result_str.startswith("```") and result_str.endswith("```"):
+        result_str = re.sub(r'^```[^\n]*\n', '', result_str)
+        result_str = re.sub(r'\n```$', '', result_str)
+        result_str = result_str.strip()
+    try:
+        return json.loads(result_str)
+    except Exception as e:
+        st.error(f"JSON parsing error: {e}")
+        st.error(f"String attempted to parse: {result_str}")
+        raise e
+
+# ========== Stage 1: Tavily Functions ==========
+def generate_question_for_object(product: str, object_name: str, object_description: str) -> str:
+    prompt = f"""
+Generate one natural and complete question about the AP model object "{object_name}" ({object_description}) regarding {product}.
+The question should meet the following conditions:
+- Natural English as a complete sentence
+- A question that investigates specific content related to {product}
+- A question that would likely yield good results in a search engine
+Output only the question:
 """
+    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}], temperature=0)
+    return response.choices[0].message.content.strip()
 
-
-def build_background(product, user_experience, avant_garde_issue):
-    return f"""
-Here are some information about the {product}:
-##Positive feedback: {user_experience}
-##Negative feedback: {avant_garde_issue}
-Please analyze and generate the all objects and paths in AP model based on the given information. And as I mentioned, imagine 1 example situation for each path.
-The output format should be like:
-1. **Object or path**: Description
-Only output objects and paths. Let's think step by step.
+def generate_question_for_arrow(product: str, arrow_name: str, arrow_info: dict) -> str:
+    prompt = f"""
+Generate a natural and complete question about the AP model arrow "{arrow_name}" regarding {product}.
+Arrow details:
+- Source: {arrow_info['from']}
+- Target: {arrow_info['to']}
+- Description: {arrow_info['description']}
+The question should meet the following conditions:
+- Natural English as a complete sentence
+- A question that specifically investigates the transformation relationship from {arrow_info['from']} to {arrow_info['to']}
+- A question that can discover specific cases or relationships in {product}
+Output only the question:
 """
+    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}], temperature=0)
+    return response.choices[0].message.content.strip()
 
-def update_description(product, description_history, bg_history, initial_description, step):
-    introduction = f"""
-This is {product}. The development of this technology follows these 3 steps:
-##Step 1: Ferment period: In this step, technological development progresses steadily, focusing mainly on solving existing problems and improving current functionalities. At the end of this period, current problem will be solved and new problem will happen.
-##Step 2: Take-off period: In this step, technology enters a period of rapid development. People propose various innovative ideas, which are eventually combined to form entirely new forms of technology. At the end of this period, this technology will have a huge development, but also lead to new problem.
-##Step 3: Maturity period: In this step, technological development slows down again. While solving the problems in last stage. At the end of this period, the technology develops to a more stable and mature state.
+def search_and_get_answer(question: str) -> str:
+    try:
+        response = tavily_client.search(query=question, include_answer=True)
+        answer = response.get('answer', '')
+        if answer: return answer
+        results = response.get('results', [])
+        return results[0].get('content', "No information found") if results else "No information found"
+    except Exception as e: return f"Search error: {str(e)}"
 
-"""
-    if step == 0:
-        introduction += f"""
-## Initial description before step 1:
-{initial_description}
+def build_ap_element(product: str, element_type: str, element_name: str, answer: str) -> dict:
+    if element_type == "object":
+        prompt = f"""
+Build an AP element for {element_name} of {product} based on the following information:
+Information: {answer}
+Output in the following JSON format:
+{{"type": "{element_name}", "definition": "Specific and concise definition (within 100 characters)", "example": "Specific example related to this object"}}
 """
     else:
-        for i in range(step):
-            introduction += f"""
-    ##Description after Step {i+1}: 
-    {description_history[i]['description']}
-
-    ##Background that related to AP model after Step {i+1}:
-    {bg_history[i]['background']}
-    """
-    introduction += f"""
-Now analyze and imagine what the product will look like at the end of step {step+1}, such as appearance or function. Only output the description for step {step+1} in less than 100 words.
+        arrow_info = AP_MODEL_STRUCTURE["arrows"][element_name]
+        prompt = f"""
+Build an AP element for {element_name} ({arrow_info['from']} → {arrow_info['to']}) of {product} based on the following information:
+Information: {answer}
+Output in the following JSON format:
+{{"source": "{arrow_info['from']}", "target": "{arrow_info['to']}", "type": "{element_name}", "definition": "Specific explanation of transformation relationship (within 100 characters)", "example": "Specific example related to this arrow"}}
 """
-    
-    return introduction
+    try:
+        response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"})
+        return json.loads(response.choices[0].message.content.strip())
+    except Exception: return None
 
-def update_background(product, background, description):
-    return f"""
-Here is the evolution step of {product} and the related information based on AP model:
-{background}
-Now move to next step, and the {product} has evolved. The new description of it is {description}.
-Please generate the new background of {product} based on AP model. Imagine if problems are solved? How do them solved? Are there any new problems are realized? And as I mentioned, imagine 1 example situation for each path.
-The output format should be like:
-1. **Object or path**: Description
-Only output objects and paths. Let's think step by step.
+def process_element(product: str, element_type: str, name: str, info: dict):
+    try:
+        if element_type == "object":
+            question = generate_question_for_object(product, name, info)
+        else:
+            question = generate_question_for_arrow(product, name, info)
+        answer = search_and_get_answer(question)
+        if "Search error" in answer or not answer:
+            return None, None
+        element_data = build_ap_element(product, element_type, name, answer)
+        if not element_data:
+            return None, None
+        return {"type": element_type, "name": name, "data": element_data}, f"## {name}\n{answer}"
+    except Exception as e:
+        st.warning(f"Error occurred while processing element '{name}': {e}")
+        return None, None
+
+def build_stage1_ap_with_tavily(product: str, status_container):
+    ap_model = {"nodes": [], "arrows": []}
+    all_answers = []
+    MAX_WORKERS = 5
+    tasks = []
+    for name, desc in AP_MODEL_STRUCTURE["objects"].items():
+        tasks.append((product, "object", name, desc))
+    for name, info in AP_MODEL_STRUCTURE["arrows"].items():
+        tasks.append((product, "arrow", name, info))
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        future_to_task = {executor.submit(process_element, *task): task for task in tasks}
+        for future in concurrent.futures.as_completed(future_to_task):
+            task_name = future_to_task[future][2]
+            status_container.write(f"  - Searching element '{task_name}'...")
+            result, answer_text = future.result()
+            if result:
+                if result["type"] == "object": ap_model["nodes"].append(result["data"])
+                else: ap_model["arrows"].append(result["data"])
+            if answer_text: all_answers.append(answer_text)
+    
+    status_container.write("Generating introduction...")
+    intro_prompt = f"Based on the following information about {product} from various perspectives, create a concise introduction within 100 words in English about what {product} is.\n### Collected Information:\n{''.join(all_answers)}"
+    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": intro_prompt}], temperature=0)
+    introduction = response.choices[0].message.content
+    return introduction, ap_model
+
+# ========== Stage 2 & 3: Multi-Agent Functions ==========
+def generate_agents(topic: str) -> list:
+    prompt = f"""
+Generate 3 completely different expert agents for generating AP model elements about the theme "{topic}".
+Each agent must have different perspectives and expertise, and be able to provide creative and innovative future predictions.
+Output in the following JSON format:
+{{ "agents": [ {{ "name": "Agent name", "expertise": "Field of expertise", "personality": "Personality/characteristics", "perspective": "Unique perspective" }} ] }}
 """
+    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2, response_format={"type": "json_object"})
+    result = parse_json_response(response.choices[0].message.content)
+    return result["agents"]
 
-def generate_story(product, bg_history, description_history):
-    backgrounds = "\n".join([f"Step {item['step']}: {item['background']}" for item in bg_history])
-    descriptions = "\n".join([f"Step {item['step']}: {item['description']}" for item in description_history])
+def agent_generate_element(agent: dict, topic: str, element_type: str, previous_stage_ap: dict, user_vision: str, context: dict, previous_proposals: list) -> str:
+    context_info = ""
+    if element_type == "Daily Spaces and User Experience": 
+        context_info = f"##New Technology and Resources:\n{context.get('Technology and Resources', '')}"
+    elif element_type == "Avant-garde Social Issues": 
+        context_info = f"##New Technology and Resources:\n{context.get('Technology and Resources', '')}\n##New Daily Spaces and User Experience:\n{context.get('Daily Spaces and User Experience', '')}"
     
-    return f"""
-Now you need to generate an interesting short science fiction. The topic is about {product}.
-Here is the description of this product in 3 development steps:
-{descriptions}
-Here is the background settings based on AP model in 3 development steps:
-{backgrounds}
-Your story should be no more than 500 words.
+    history_info = "\n##Your past proposals (avoid duplication):\n" + "".join([f"Proposal {i+1}: {p}\n" for i, p in enumerate(previous_proposals)]) if previous_proposals else ""
+    
+    prompt = f"""
+As {agent['name']}, with expertise in {agent['expertise']} and characteristics of {agent['personality']}, analyze from the unique perspective of {agent['perspective']}.
+##Theme: {topic}
+##Previous stage AP model:
+{json.dumps(previous_stage_ap, ensure_ascii=False, indent=2)}
+##User's future vision:
+{user_vision}
+{context_info}
+{history_info}
+**Important**: Avoid duplicating past proposals and provide new approaches from different angles. Avoid same or similar proposals and present completely new approaches utilizing your expertise.
+From your expertise and perspective, creatively and innovatively generate content for "{element_type}" in the next stage. Based on S-curve theory, consider development from the previous stage and new possibilities, and provide your unique, outstanding, and imaginative ideas **in text content only, within 200 words. No JSON format or extra explanations needed.**
 """
+    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2)
+    return response.choices[0].message.content.strip()
 
-def generate_story_direct(product, user_experience, avant_garde_issue):
-    return f"""Now you need to generate an interesting short science fiction. The topic is about {product}. Here is the description of this product:
-##Positive feedback: {user_experience}
-##Negative feedback: {avant_garde_issue}
-Your story should be around 500 words."""
-
-def generate_image_edit_prompt(product, next_description, step):
-    """Generate prompt for image editing based on the evolution stage"""
-    stage_names = {
-        1: "Ferment Period",
-        2: "Take-off Period",
-        3: "Maturity Period"
-    }
-    
-    return f"""
-You are an expert drawer, who is good at imagine the future.
-Here is an image of {product}. Imagine how it will looks like after the {stage_names[step]} based on the following description:
-##New evolved description: {next_description}
+def judge_element_proposals(proposals: list[dict], element_type: str, topic: str) -> dict:
+    proposals_text = "".join([f"##Proposal {i+1} (Agent: {p['agent_name']}):\n{p['proposal']}\n\n" for i, p in enumerate(proposals)])
+    prompt = f"""
+The following are {len(proposals)} proposals for "{element_type}" regarding "{topic}". Evaluate each proposal from the perspectives of creativity and future vision, and select the most imaginative proposal.
+{proposals_text}
+Output in the following JSON format:
+{{ "selected_proposal": "Agent name of selected proposal", "selected_content": "Content of selected {element_type} proposal", "selection_reason": "Selection reason (within 150 words)", "creativity_score": "Creativity evaluation (1-10)", "future_vision_score": "Future vision evaluation (1-10)" }}
 """
+    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2, response_format={"type": "json_object"})
+    return parse_json_response(response.choices[0].message.content)
 
-# Main content area
-if generate_button and product and user_experience and avant_garde_issue and uploaded_file and not st.session_state.generated:
-    # Initialize containers for each step
-    initial_container = st.container()
-    step1_container = st.container()
-    step2_container = st.container()
-    step3_container = st.container()
-    final_container = st.container()
-    initial_description = ""
-    
-    with initial_container:
-        # Save uploaded image temporarily
-        with st.spinner("Processing image..."):
-            # Read uploaded file
-            image = Image.open(uploaded_file)
-            
-            # Resize image
-            resized_image = resize_image(image)
-            
-            # Convert to base64
-            img_base64 = encode_image(resized_image)
-            
-            # Save as temp file
-            temp_image_path = save_temp_image(resized_image)
-            
-            # Store images history
-            image_history = [resized_image]
-            
-            # Display input image
-            st.subheader("Input Image")
-            st.image(resized_image, caption=f"{product} - Current State", use_container_width=True)
-    
-    # Create placeholder for progress
-    progress_placeholder = st.empty()
-    progress_bar = progress_placeholder.progress(0)
-    status_text = st.empty()
-    
-    # Storage for history
-    bg_history = []
-    description_history = []
-    
-    with step1_container:
-        # Step 1: Generate initial description
-        status_text.text("Analyzing current product...")
-        
-        prompt = generate_description(product, user_experience, avant_garde_issue)
-        completion = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{img_base64}",
-                            }
-                        },
-                    ],
-                }
-            ]
-        )
-        initial_description = completion.choices[0].message.content
+def final_judge_best_iteration_element(iteration_results: list, element_type: str, topic: str) -> dict:
+    prompt = f"""
+The following are the results of 3 iterations for generating "{element_type}" of "{topic}". Comprehensively evaluate the improvement effects of each iteration and make the final selection of the best proposal.
+##Iteration 1 result:
+{json.dumps(iteration_results[0], ensure_ascii=False, indent=2)}
+##Iteration 2 result:
+{json.dumps(iteration_results[1], ensure_ascii=False, indent=2)}
+##Iteration 3 result:
+{json.dumps(iteration_results[2], ensure_ascii=False, indent=2)}
+Output in the following JSON format:
+{{ "final_selected_iteration": "Selected iteration number (1, 2, or 3)", "final_selection_reason": "Final selection reason (within 200 words)", "final_selected_content": "Final selected content of {element_type}" }}
+"""
+    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2, response_format={"type": "json_object"})
+    return parse_json_response(response.choices[0].message.content)
 
-        prompt = update_description(product, bg_history, description_history, initial_description, 0)
-        completion = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
-        )
-        first_description = completion.choices[0].message.content
-        
-        # Store first step description
-        description_history.append({
-            "step": 1,
-            "description": first_description
-        })
-        
-        progress_bar.progress(0.15)
-        
-        # Generate initial background
-        status_text.text("Creating initial societal background based on AP model...")
-        
-        user_prompt = build_background(product, user_experience, avant_garde_issue)
-        completion = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": user_prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{img_base64}",
-                            }
-                        },
-                    ],
-                }
-            ]
-        )
-        initial_background = completion.choices[0].message.content
-        
-        # Store initial background
-        bg_history.append({
-            "step": 1,
-            "background": initial_background
-        })
-        
-        progress_bar.progress(0.25)
-        
-        # Generate evolved image for stage 1 based on initial description
-        status_text.text("Generating product image for Ferment period...")
-        
-        # Create image edit prompt
-        image_edit_prompt = generate_image_edit_prompt(product, first_description, 1)
-        
-        # Edit image using gpt-image-1
-        with open(temp_image_path, "rb") as img_file:
-            result = client.images.edit(
-                model="gpt-image-1",
-                image=img_file,
-                prompt=image_edit_prompt,
-                quality="low"
-            )
-        
-        # Save and process stage 1 image
-        stage1_image_bytes = base64.b64decode(result.data[0].b64_json)
-        stage1_image = Image.open(io.BytesIO(stage1_image_bytes))
-        stage1_image_path = "stage1_image.png"
-        stage1_image.save(stage1_image_path)
-        
-        # Update image history - replace the original uploaded image with the evolved one
-        image_history[0] = stage1_image
-        
-        progress_bar.progress(0.3)
-        
-        # Display Stage 1
-        st.subheader("🌱 Stage 1: Ferment Period")
-        with st.expander("View Stage 1 Details", expanded=False):
-            st.markdown("**Current Description:**")
-            st.markdown(first_description)
-            st.markdown("**AP Model Background:**")
-            st.markdown(initial_background)
-            st.markdown("**Product Image:**")
-            st.image(stage1_image, caption=f"{product} - Ferment Period", use_container_width=True)
-    
-    with step2_container:
-        # Step 2: Update description
-        status_text.text("Evolving to Take-off period...")
-        
-        prompt = update_description(product, description_history, bg_history, initial_description, 1)
-        completion = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ]
-        )
-        second_description = completion.choices[0].message.content
-        
-        # Store second description
-        description_history.append({
-            "step": 2,
-            "description": second_description
-        })
-        
-        progress_bar.progress(0.40)
-        
-        # Generate evolved image for stage 2
-        status_text.text("Generating evolved product image for Take-off period...")
-        
-        # Create image edit prompt
-        image_edit_prompt = generate_image_edit_prompt(
-            product, 
-            second_description, 
-            2
-        )
-        
-        # Edit image using gpt-image-1
-        with open(stage1_image_path, "rb") as img_file:
-            result = client.images.edit(
-                model="gpt-image-1",
-                image=img_file,
-                prompt=image_edit_prompt,
-                quality="low"
-            )
-        
-        # Save and process stage 2 image
-        stage2_image_bytes = base64.b64decode(result.data[0].b64_json)
-        stage2_image = Image.open(io.BytesIO(stage2_image_bytes))
-        stage2_image_path = "stage2_image.png"
-        stage2_image.save(stage2_image_path)
-        
-        # Add to image history
-        image_history.append(stage2_image)
-        
-        progress_bar.progress(0.45)
-        
-        # Update background
-        status_text.text("Updating societal background based on AP model...")
-        
-        prompt = update_background(product, bg_history[0]['background'], second_description)
-        completion = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ]
-        )
-        second_background = completion.choices[0].message.content
-        
-        # Store second background
-        bg_history.append({
-            "step": 2,
-            "background": second_background
-        })
-        
-        progress_bar.progress(0.6)
-        
-        # Display Stage 2
-        st.subheader("🚀 Stage 2: Take-off Period")
-        with st.expander("View Stage 2 Details", expanded=False):
-            st.markdown("**Updated Description:**")
-            st.markdown(second_description)
-            st.markdown("**AP Model Background Changes:**")
-            st.markdown(second_background)
-            st.markdown("**Evolved Product Image:**")
-            st.image(stage2_image, caption=f"{product} - Take-off Period", use_container_width=True)
-    
-    with step3_container:
-        # Step 3: Update description
-        status_text.text("Evolving to Maturity period...")
-        
-        prompt = update_description(product, description_history, bg_history, initial_description, 2)
-        completion = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ]
-        )
-        third_description = completion.choices[0].message.content
-        
-        # Store third description
-        description_history.append({
-            "step": 3,
-            "description": third_description
-        })
-        
-        progress_bar.progress(0.70)
-        
-        # Generate evolved image for stage 3
-        status_text.text("Generating evolved product image for Maturity period...")
-        
-        # Create image edit prompt
-        image_edit_prompt = generate_image_edit_prompt(
-            product, 
-            third_description, 
-            3
-        )
-        
-        # Edit image using gpt-image-1
-        with open(stage2_image_path, "rb") as img_file:
-            result = client.images.edit(
-                model="gpt-image-1",
-                image=img_file,
-                prompt=image_edit_prompt,
-                quality="low"
-            )
-        
-        # Save and process stage 3 image
-        stage3_image_bytes = base64.b64decode(result.data[0].b64_json)
-        stage3_image = Image.open(io.BytesIO(stage3_image_bytes))
-        stage3_image_path = "stage3_image.png"
-        stage3_image.save(stage3_image_path)
-        
-        # Add to image history
-        image_history.append(stage3_image)
-        
-        progress_bar.progress(0.75)
-        
-        # Update background
-        status_text.text("Finalizing societal background based on AP model...")
-        
-        prompt = update_background(product, bg_history[1]['background'], third_description)
-        completion = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ]
-        )
-        third_background = completion.choices[0].message.content
-        
-        # Store third background
-        bg_history.append({
-            "step": 3,
-            "background": third_background
-        })
-        
-        progress_bar.progress(0.85)
-        
-        # Display Stage 3
-        st.subheader("🏆 Stage 3: Maturity Period")
-        with st.expander("View Stage 3 Details", expanded=False):
-            st.markdown("**Final Description:**")
-            st.markdown(third_description)
-            st.markdown("**AP Model Background Changes:**")
-            st.markdown(third_background)
-            st.markdown("**Evolved Product Image:**")
-            st.image(stage3_image, caption=f"{product} - Maturity Period", use_container_width=True)
-    
-    with final_container:
-        # Generate direct story first
-        status_text.text("⏳ Creating direct story for comparison... This may take a moment.")
-        
-        story_direct_prompt = generate_story_direct(product, user_experience, avant_garde_issue)
-        completion_direct = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "user", "content": story_direct_prompt}
-            ]
-        )
-        story_direct = completion_direct.choices[0].message.content
-        
-        progress_bar.progress(0.87)
-        
-        # Generate direct story cover
-        status_text.text("Generating direct story cover... This may take a moment.")
-        
-        cover_img_direct = client.images.generate(
-            model="gpt-image-1",
-            prompt=f"Draw a cover for the short story about {product}: {story_direct}",
-            quality="low"
-        )
-        cover_image_bytes_direct = base64.b64decode(cover_img_direct.data[0].b64_json)
-        cover_image_direct = Image.open(io.BytesIO(cover_image_bytes_direct))
-        
-        progress_bar.progress(0.9)
-        
-        # Generate AP-based science fiction story
-        status_text.text("⏳ Creating AP model-based story... This may take a moment.")
-        
-        story_prompt = generate_story(product, bg_history, description_history)
-        completion = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": story_prompt}
-            ]
-        )
-        story = completion.choices[0].message.content
-        
-        progress_bar.progress(0.95)
-        
-        # Generate AP-based story cover
-        status_text.text("Generating AP-based story cover... This may take a moment.")
-        
-        cover_img = client.images.generate(
-            model="gpt-image-1",
-            prompt=f"Draw a cover for the short story about the evolution of {product}: {story}",
-            quality="low"
-        )
-        cover_image_bytes = base64.b64decode(cover_img.data[0].b64_json)
-        cover_image = Image.open(io.BytesIO(cover_image_bytes))
-        
-        progress_bar.progress(1.0)
-        status_text.text("✅ Generation complete!")
-        time.sleep(0.5)
-        progress_placeholder.empty()
-        status_text.empty()
-        
-        # Store generated data in session state
-        st.session_state.bg_history = bg_history
-        st.session_state.description_history = description_history
-        st.session_state.story = story
-        st.session_state.story_direct = story_direct
-        st.session_state.image_data = [get_image_bytes(img) for img in image_history]
-        st.session_state.cover_image_data = get_image_bytes(cover_image)
-        st.session_state.cover_image_data_direct = get_image_bytes(cover_image_direct)
-        st.session_state.product = product
-        st.session_state.generated = True
-        
-        # Clean up temporary image files
-        for file_path in [temp_image_path, stage1_image_path, stage2_image_path, stage3_image_path]:
-            if os.path.exists(file_path):
+def generate_single_element_with_iterations(status_container, topic: str, element_type: str, previous_stage_ap: dict, agents: list, user_vision: str, context: dict) -> dict:
+    iteration_results = []
+    agent_history = {agent['name']: [] for agent in agents}
+    for iteration in range(1, 4):
+        status_container.write(f"    - Iteration {iteration}/3: {len(agents)} agents generating proposals...")
+        proposals = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(agents)) as executor:
+            future_to_agent = {executor.submit(agent_generate_element, agent, topic, element_type, previous_stage_ap, user_vision, context, agent_history[agent['name']]): agent for agent in agents}
+            for future in concurrent.futures.as_completed(future_to_agent):
+                agent = future_to_agent[future]
                 try:
-                    os.remove(file_path)
-                except:
-                    pass
-                    
-        # Force rerun to display results with storage
+                    proposal_content = future.result()
+                    proposals.append({"agent_name": agent['name'], "proposal": proposal_content})
+                    agent_history[agent['name']].append(proposal_content)
+                except Exception as exc: st.warning(f"Error in proposal generation by {agent['name']}: {exc}")
+        if not proposals: continue
+        status_container.write(f"    - Iteration {iteration}/3: Evaluation by judge...")
+        judgment = judge_element_proposals(proposals, element_type, topic)
+        iteration_results.append({"iteration_number": iteration, "all_agent_proposals": proposals, "judgment": judgment})
+    if not iteration_results: return {"element_type": element_type, "error": "No proposals were generated."}
+    status_container.write(f"  - Final judgment for '{element_type}'...")
+    final_judgment = final_judge_best_iteration_element(iteration_results, element_type, topic)
+    return {"element_type": element_type, "iterations": iteration_results, "final_decision": final_judgment}
+
+def build_complete_ap_model(topic: str, previous_ap: dict, new_elements: dict, stage: int, user_vision: str) -> dict:
+    prompt = f"""
+Build the complete AP model for Stage {stage}.
+##Previous stage information:
+{json.dumps(previous_ap, ensure_ascii=False, indent=2)}
+##Newly generated core elements:
+Technology and Resources: {new_elements["Technology and Resources"]}
+Daily Spaces and User Experience: {new_elements["Daily Spaces and User Experience"]}
+Avant-garde Social Issues: {new_elements["Avant-garde Social Issues"]}
+##User's future vision:
+{user_vision}
+**Important**: Stage {stage} must include all of the following 6 objects and 12 arrows:
+Objects: Avant-garde Social Issues, People's Values, Social Issues, Technology and Resources, Daily Spaces and User Experience, Institutions
+Arrows: Media, Community Formation, Cultural Arts Promotion, Standardization, Communication, Organization, Meaning Attribution, Products/Services, Habituation, Paradigm, Business Ecosystem, Art (Social Criticism)
+Center on the newly generated 3 elements, update other elements with content appropriate for Stage {stage}, and build all arrow relationships.
+Output in the following JSON format:
+{{"nodes": [{{"type": "Object name", "definition": "Description of this object", "example": "Specific example of this object"}}], "arrows": [{{"source": "Source object", "target": "Target object", "type": "Arrow name", "definition": "Description of this arrow", "example": "Specific example of this arrow"}}]}}
+"""
+    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], response_format={"type": "json_object"})
+    return parse_json_response(response.choices[0].message.content)
+
+def generate_stage_introduction(topic: str, stage: int, new_elements: dict, user_vision: str) -> str:
+    prompt = f"""
+Create an introduction for Stage {stage} of {topic} based on the following newly generated elements.
+##Generated elements:
+Technology and Resources: {new_elements["Technology and Resources"]}
+Daily Spaces and User Experience: {new_elements["Daily Spaces and User Experience"]}
+Avant-garde Social Issues: {new_elements["Avant-garde Social Issues"]}
+##User's future vision:
+{user_vision}
+Create a concise introduction within 100 words in English about what the situation of {topic} in Stage {stage} would be like.
+"""
+    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=0)
+    return response.choices[0].message.content.strip()
+
+# ========== Story Generation Functions ==========
+def generate_outline(theme: str, scene: str, ap_model_history: list) -> str:
+    prompt = f"""
+You are a professional SF writer. Based on the following information, create a synopsis for a short SF novel with the theme "{theme}".
+## Story Setting:
+{scene}
+## Story Beginning (S-curve Stage 2):
+{json.dumps(ap_model_history[1]['ap_model'], ensure_ascii=False, indent=2)}
+## Story Ending (S-curve Stage 3):
+{json.dumps(ap_model_history[2]['ap_model'], ensure_ascii=False, indent=2)}
+## Story Background (S-curve Stage 1):
+{json.dumps(ap_model_history[0]['ap_model'], ensure_ascii=False, indent=2)}
+Based on the above information, create a story synopsis that includes the main plot, characters, and central conflicts unfolding in the specified setting. The synopsis should be innovative and compelling, following the style of SF novels.
+"""
+    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}])
+    return response.choices[0].message.content
+
+def generate_story(theme: str, outline: str) -> str:
+    prompt = f"""
+You are a professional SF writer. Based on the following synopsis, write a short SF novel with the theme "{theme}".
+## Story Synopsis:
+{outline}
+Write a coherent story following this synopsis. The story should be innovative, compelling, and follow the SF style. Please write approximately 1500 words in English.
+"""
+    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}])
+    return response.choices[0].message.content
+
+# ========== UI Functions for Visualization ==========
+def show_visualization(ap_history, height=750):
+    """Generate and display visualization HTML based on AP model history"""
+    if not ap_history:
+        st.warning("No data to visualize.")
+        return
+    
+    html_content = f'''
+    <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>AP Model Visualization</title><style>
+    body{{font-family:sans-serif;background-color:#f0f2f6;margin:0;padding:20px;}}
+    .vis-wrapper{{overflow-x:auto;border:1px solid #ddd;border-radius:10px;background:white;padding-top:20px;}}
+    .visualization{{position:relative;width:{len(ap_history)*720}px;height:680px;background:#fafafa;}}
+    .node{{position:absolute;width:140px;height:140px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;text-align:center;cursor:pointer;transition:all .3s;box-shadow:0 4px 12px rgba(0,0,0,.15);border:3px solid white;line-height:1.2;padding:15px;box-sizing:border-box;}}
+    .node:hover{{transform:scale(1.1);z-index:100;}}.node-avant-garde{{background:#ff9999;}}.node-values{{background:#ecba13;}}.node-social{{background:#ffff99;}}.node-technology{{background:#99cc99;}}.node-daily{{background:#99cccc;}}.node-institutions{{background:#9999ff;}}
+    .arrow{{position:absolute;height:2px;background:#333;transform-origin:left center;z-index:1;}}
+    .arrow::after{{content:'';position:absolute;right:-8px;top:-4px;width:0;height:0;border-left:8px solid #333;border-top:4px solid transparent;border-bottom:4px solid transparent;}}
+    .arrow-label{{position:absolute;background:white;padding:2px 8px;border:1px solid #ddd;border-radius:15px;font-size:10px;white-space:nowrap;transform:translate(-50%,-50%);z-index:10;}}
+    .dotted-arrow{{border-top:2px dotted #333;background:transparent;}}.dotted-arrow::after{{border-left-color:#333;}}
+    .tooltip{{position:absolute;background:rgba(0,0,0,.9);color:white;padding:12px;border-radius:8px;font-size:12px;max-width:300px;z-index:1000;pointer-events:none;opacity:0;transition:opacity .3s;line-height:1.4;}}
+    .tooltip.show{{opacity:1;}}
+    </style></head><body><div class="vis-wrapper"><div class="visualization" id="visualization"></div></div><div class="tooltip" id="tooltip"></div><script>
+    const viz=document.getElementById('visualization'),tooltip=document.getElementById('tooltip');let allNodes={{}};const apData={json.dumps(ap_history,ensure_ascii=False)};
+    function getNodeClass(type){{
+        const mapping = {{
+            'Avant-garde Social Issues': 'avant-garde',
+            'People\\'s Values': 'values', 
+            'Social Issues': 'social',
+            'Technology and Resources': 'technology',
+            'Daily Spaces and User Experience': 'daily',
+            'Institutions': 'institutions'
+        }};
+        return mapping[type] || 'default';
+    }}
+    function getPos(s,t){{const w=700,o=s*w;if(s%2===0){{switch(t){{case'Institutions':return{{x:o+355,y:50}};case'Daily Spaces and User Experience':return{{x:o+180,y:270}};case'Social Issues':return{{x:o+530,y:270}};case'Technology and Resources':return{{x:o+50,y:500}};case'Avant-garde Social Issues':return{{x:o+355,y:500}};case'People\\'s Values':return{{x:o+660,y:500}};default:return null}}}}else{{switch(t){{case'Technology and Resources':return{{x:o+50,y:50}};case'Avant-garde Social Issues':return{{x:o+355,y:50}};case'People\\'s Values':return{{x:o+660,y:50}};case'Daily Spaces and User Experience':return{{x:o+180,y:270}};case'Social Issues':return{{x:o+530,y:270}};case'Institutions':return{{x:o+355,y:500}};default:return null}}}}}}
+    function render(){{viz.innerHTML='';allNodes={{}};apData.forEach((s,i)=>{{if(!s.ap_model||!s.ap_model.nodes)return;s.ap_model.nodes.forEach(d=>{{const p=getPos(i,d.type);if(!p)return;const n=document.createElement('div');n.className=`node node-${{getNodeClass(d.type)}}`;n.style.left=p.x+'px';n.style.top=p.y+'px';n.textContent=d.type;const e=d.definition+(d.example?`\\n\\n[Example] `+d.example:"");n.dataset.definition=e.replace(/\\n/g,'<br>');n.dataset.id=`s${{s.stage}}-${{d.type}}`;n.addEventListener('mouseenter',showTip);n.addEventListener('mouseleave',hideTip);viz.appendChild(n);allNodes[n.dataset.id]=n}})}});apData.forEach((s,i)=>{{if(!s.ap_model||!s.ap_model.arrows)return;const next=apData[i+1];s.ap_model.arrows.forEach(a=>{{const isLast=!next,type=a.type,hide=isLast&&['Standardization','Organization','Meaning Attribution','Habituation'].includes(type);if(hide)return;let src=allNodes[`s${{s.stage}}-${{a.source}}`],tgt,isInter=false;if(next&&(type==='Organization'||type==='Standardization')){{tgt=allNodes[`s${{next.stage}}-Technology and Resources`];isInter=!!tgt}}else if(next&&type==='Meaning Attribution'){{tgt=allNodes[`s${{next.stage}}-Daily Spaces and User Experience`];isInter=!!tgt}}else if(next&&type==='Habituation'){{tgt=allNodes[`s${{next.stage}}-Institutions`];isInter=!!tgt}}if(!isInter){{tgt=allNodes[`s${{s.stage}}-${{a.target}}`];}}if(src&&tgt){{const d=type==='Art (Social Criticism)'||type==='Media';createArrow(src,tgt,a,d)}}}})}})}}
+    function createArrow(s,t,a,d){{const r=70,p1={{x:parseFloat(s.style.left),y:parseFloat(s.style.top)}},p2={{x:parseFloat(t.style.left),y:parseFloat(t.style.top)}},dx=p2.x+r-(p1.x+r),dy=p2.y+r-(p1.y+r),dist=Math.sqrt(dx*dx+dy*dy),ang=Math.atan2(dy,dx)*180/Math.PI,sx=p1.x+r+dx/dist*r,sy=p1.y+r+dy/dist*r,adjDist=dist-r*2,ar=document.createElement('div');ar.className=d?'arrow dotted-arrow':'arrow';ar.style.left=sx+'px';ar.style.top=sy+'px';ar.style.width=adjDist+'px';ar.style.transform=`rotate(${{ang}}deg)`;const l=document.createElement('div');l.className='arrow-label';l.textContent=a.type;const lx=sx+dx/dist*adjDist/2,ly=sy+dy/dist*adjDist/2;l.style.left=lx+'px';l.style.top=ly+'px';const e=a.definition+(a.example?`\\n\\n[Example] `+a.example:"");l.dataset.definition=e.replace(/\\n/g,'<br>');l.addEventListener('mouseenter',showTip);l.addEventListener('mouseleave',hideTip);viz.appendChild(ar);viz.appendChild(l)}}
+    function showTip(e){{const d=e.target.dataset.definition;if(d){{tooltip.innerHTML=d;tooltip.style.left=e.pageX+15+'px';tooltip.style.top=e.pageY-10+'px';tooltip.classList.add('show')}}}}
+    function hideTip(){{tooltip.classList.remove('show')}}
+    render();
+    </script></body></html>'''
+    st.components.v1.html(html_content, height=height, scrolling=True)
+
+def show_agent_proposals(element_result):
+    """Display multi-agent proposal results nicely"""
+    st.markdown(f"#### 🧠 Generation Process for '{element_result['element_type']}'")
+    
+    for iteration in element_result['iterations']:
+        st.markdown(f"---")
+        st.markdown(f"##### Iteration {iteration['iteration_number']}/3")
+        
+        st.markdown("###### 🤖 Proposals from Each Agent")
+        cols = st.columns(len(iteration['all_agent_proposals']))
+        for i, proposal in enumerate(iteration['all_agent_proposals']):
+            with cols[i]:
+                st.markdown(f"**{proposal['agent_name']}**")
+                st.info(proposal['proposal'])
+        
+        st.markdown("###### 🎯 Judgment Result")
+        judgment = iteration['judgment']
+        st.success(f"**Selected Proposal:** {judgment['selected_proposal']}")
+        st.write(f"**Selected Content:** {judgment['selected_content']}")
+        st.write(f"**Selection Reason:** {judgment['selection_reason']}")
+    
+    st.markdown("---")
+    st.markdown("##### 🏆 Final Decision")
+    final_decision = element_result['final_decision']
+    st.success(f"**Finally Selected Content (from Iteration {final_decision['final_selected_iteration']}):**")
+    st.info(f"{final_decision['final_selected_content']}")
+
+# ========== Main UI & State Management ==========
+st.title("🚀 Near-Future SF Generator")
+
+# --- Session State Initialization ---
+if 'process_started' not in st.session_state:
+    st.session_state.process_started = False
+    st.session_state.topic = ""
+    st.session_state.scene = ""
+    st.session_state.ap_history = []
+    st.session_state.descriptions = []
+    st.session_state.story = ""
+    st.session_state.agents = []
+    st.session_state.stage_elements_results = {'stage2': [], 'stage3': []}
+
+# --- STEP 0: Initial Input Screen ---
+if not st.session_state.process_started:
+    st.markdown("Enter the **theme** you want to explore and the **setting** for the story. AI will predict the future in 3 stages and automatically generate an SF novel to completion.")
+    
+    topic_input = st.text_input("Enter the theme you want to explore", placeholder="e.g., AI, autonomous driving, quantum computing")
+    scene_input = st.text_area("Describe the story setting in detail", placeholder="e.g., A futuristic city at sunset, a quantum research lab")
+
+    if st.button("Start AP & Story Generation →", type="primary", disabled=not topic_input or not scene_input):
+        st.session_state.topic = topic_input
+        st.session_state.scene = scene_input
+        st.session_state.process_started = True
         st.rerun()
 
-# Display results if already generated
-if st.session_state.generated:
-    # Display evolution timeline
-    st.subheader("🔄 Product Evolution Timeline")
-    cols = st.columns(3)
-    stages = ["Ferment", "Take-off", "Maturity"]
+# --- Fully Automated Execution Process ---
+else:
+    st.header(f"Theme: {st.session_state.topic}")
+    user_vision = f"Imagine the future development of '{st.session_state.topic}' through technological evolution."
+
+    # ==================================================================
+    # Display Areas: Always show existing data
+    # ==================================================================
+    # --- Stage 1 Display ---
+    if len(st.session_state.ap_history) >= 1:
+        st.markdown("---")
+        st.header("Stage 1: Ferment Period (Current Analysis)")
+        st.info(st.session_state.descriptions[0])
+        show_visualization(st.session_state.ap_history[0:1])
+
+    # --- Stage 2 Display ---
+    if st.session_state.agents:
+        st.markdown("---")
+        st.header("Stage 2: Take-off Period (Development Prediction)")
+        st.subheader("🤖 Expert AI Agent Team")
+        with st.expander("View Generated Agents", expanded=True):
+            cols = st.columns(len(st.session_state.agents))
+            for i, agent in enumerate(st.session_state.agents):
+                with cols[i]:
+                    st.markdown(f"**{agent['name']}**")
+                    st.write(f"**Expertise:** {agent['expertise']}")
+                    st.write(f"**Personality:** {agent['personality']}")
+                    st.write(f"**Perspective:** {agent['perspective']}")
     
-    for i, stage in enumerate(stages):
-        with cols[i]:
-            st.image(io.BytesIO(st.session_state.image_data[i]), caption=f"Stage {i+1}: {stage} Period", use_container_width=True)
-            with st.expander(f"View Stage {i+1} Description"):
-                st.markdown(st.session_state.description_history[i]['description'])
+    if st.session_state.stage_elements_results['stage2']:
+        for result in st.session_state.stage_elements_results['stage2']:
+            show_agent_proposals(result)
+
+    if len(st.session_state.ap_history) >= 2:
+        st.info(st.session_state.descriptions[1])
+        show_visualization(st.session_state.ap_history[0:2])
+
+    # --- Stage 3 Display ---
+    if st.session_state.stage_elements_results['stage3']:
+        st.markdown("---")
+        st.header("Stage 3: Maturity Period (Maturity Prediction)")
+        for result in st.session_state.stage_elements_results['stage3']:
+            show_agent_proposals(result)
+            
+    if len(st.session_state.ap_history) >= 3:
+        st.info(st.session_state.descriptions[2])
+        show_visualization(st.session_state.ap_history)
+
+    # --- Story Display ---
+    if st.session_state.story:
+        st.markdown("---")
+        st.header("🎉 Generation Results")
+        st.markdown(f"**Scene Setting:** {st.session_state.scene}")
+        st.markdown("### 📚 Generated SF Short Story")
+        st.text_area("SF Story", st.session_state.story, height=400)
+        
+        with st.expander("📈 View Summary of 3-Stage Future Predictions"):
+            stages_info = ["Stage 1: Ferment Period", "Stage 2: Take-off Period", "Stage 3: Maturity Period"]
+            for i, stage_name in enumerate(stages_info):
+                st.markdown(f"**{stage_name}**")
+                st.info(st.session_state.descriptions[i])
     
-    # Display story and cover comparison
-    st.subheader("📚 Science Fiction Stories Comparison")
-    
-    # AP-based Story
-    with st.expander("🔬 AP Model-Based Story", expanded=True):
-        col1, col2 = st.columns([1, 2])
+    # ==================================================================
+    # Generation Logic: Check data existence and generate if missing
+    # ==================================================================
+    # --- Stage 1 Generation ---
+    if len(st.session_state.ap_history) == 0:
+        with st.status("Stage 1: Building AP model with web information collection via Tavily...", expanded=True) as status:
+            intro1, model1 = build_stage1_ap_with_tavily(st.session_state.topic, status)
+            st.session_state.descriptions.append(intro1)
+            st.session_state.ap_history.append({"stage": 1, "ap_model": model1})
+        st.rerun()
+        
+    # --- Stage 2 Generation (Step by Step) ---
+    elif len(st.session_state.ap_history) == 1:
+        # Agent Generation
+        if not st.session_state.agents:
+            with st.spinner("Generating expert AI agents for analysis..."):
+                st.session_state.agents = generate_agents(st.session_state.topic)
+            st.rerun()
+        
+        # Element Generation
+        s2_results = st.session_state.stage_elements_results['stage2']
+        element_sequence = ["Technology and Resources", "Daily Spaces and User Experience", "Avant-garde Social Issues"]
+        if len(s2_results) < len(element_sequence):
+            elem_type = element_sequence[len(s2_results)]
+            with st.status(f"Stage 2: Generating '{elem_type}'...", expanded=True) as status:
+                # Pass previous element results as context
+                context = {r['element_type']: r['final_decision']['final_selected_content'] for r in s2_results}
+                result = generate_single_element_with_iterations(status, st.session_state.topic, elem_type, st.session_state.ap_history[0]['ap_model'], st.session_state.agents, user_vision, context)
+                s2_results.append(result)
+            st.rerun()
+
+        # Build Complete AP Model
+        else:
+            with st.status("Stage 2: Building complete AP model...", expanded=True) as status:
+                context = {r['element_type']: r['final_decision']['final_selected_content'] for r in s2_results}
+                status.update(label="Stage 2: Building complete AP model...")
+                model2 = build_complete_ap_model(st.session_state.topic, st.session_state.ap_history[0]['ap_model'], context, 2, user_vision)
+                status.update(label="Stage 2: Generating introduction...")
+                intro2 = generate_stage_introduction(st.session_state.topic, 2, context, user_vision)
+                st.session_state.descriptions.append(intro2)
+                st.session_state.ap_history.append({"stage": 2, "ap_model": model2})
+            st.rerun()
+
+    # --- Stage 3 Generation (Step by Step) ---
+    elif len(st.session_state.ap_history) == 2:
+        s3_results = st.session_state.stage_elements_results['stage3']
+        element_sequence = ["Technology and Resources", "Daily Spaces and User Experience", "Avant-garde Social Issues"]
+        if len(s3_results) < len(element_sequence):
+            elem_type = element_sequence[len(s3_results)]
+            with st.status(f"Stage 3: Generating '{elem_type}'...", expanded=True) as status:
+                context = {r['element_type']: r['final_decision']['final_selected_content'] for r in s3_results}
+                result = generate_single_element_with_iterations(status, st.session_state.topic, elem_type, st.session_state.ap_history[1]['ap_model'], st.session_state.agents, user_vision, context)
+                s3_results.append(result)
+            st.rerun()
+        else:
+            with st.status("Stage 3: Building complete AP model...", expanded=True) as status:
+                context2 = {r['element_type']: r['final_decision']['final_selected_content'] for r in s3_results}
+                model3 = build_complete_ap_model(st.session_state.topic, st.session_state.ap_history[1]['ap_model'], context2, 3, user_vision)
+                intro3 = generate_stage_introduction(st.session_state.topic, 3, context2, user_vision)
+                st.session_state.descriptions.append(intro3)
+                st.session_state.ap_history.append({"stage": 3, "ap_model": model3})
+            st.rerun()
+
+    # --- Story Generation ---
+    elif len(st.session_state.ap_history) == 3 and not st.session_state.story:
+        with st.spinner("Final stage: Generating SF story synopsis..."):
+            outline = generate_outline(st.session_state.topic, st.session_state.scene, st.session_state.ap_history)
+        with st.spinner("Final stage: Generating SF short story from synopsis..."):
+            story = generate_story(st.session_state.topic, outline)
+            st.session_state.story = story
+        st.success("✅ All generation processes completed!")
+        time.sleep(1)
+        st.rerun()
+        
+    # --- Final Page Action Buttons ---
+    if st.session_state.story:
+        st.markdown("---")
+        st.subheader("Actions")
+        col1, col2 = st.columns(2)
         with col1:
-            st.image(io.BytesIO(st.session_state.cover_image_data), caption="AP-Based Story Cover", use_container_width=True)
-        with col2:
-            st.markdown("**Story Text (Generated using Archaeological Prototyping Model):**")
-            st.markdown(st.session_state.story)
-    
-    # Direct Story
-    with st.expander("⚡ Direct Story", expanded=False):
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            st.image(io.BytesIO(st.session_state.cover_image_data_direct), caption="Direct Story Cover", use_container_width=True)
-        with col2:
-            st.markdown("**Story Text (Generated directly from inputs):**")
-            st.markdown(st.session_state.story_direct)
-    
-    # Download buttons
-    st.subheader("Download Options")
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        # Download background history JSON
-        bg_json = json.dumps(st.session_state.bg_history, ensure_ascii=False, indent=2)
-        st.download_button(
-            label="📥 Download AP Model JSON",
-            data=bg_json,
-            file_name="background_history.json",
-            mime="application/json",
-            key="download_bg_json"
-        )
-        
-        # Download AP-based story
-        st.download_button(
-            label="📥 Download AP Story",
-            data=st.session_state.story,
-            file_name="ap_story.txt",
-            mime="text/plain",
-            key="download_story"
-        )
-    
-    with col2:
-        # Download description history JSON
-        desc_json = json.dumps(st.session_state.description_history, ensure_ascii=False, indent=2)
-        st.download_button(
-            label="📥 Download Descriptions JSON",
-            data=desc_json,
-            file_name="description_history.json",
-            mime="application/json",
-            key="download_desc_json"
-        )
-        
-        # Download AP-based cover image
-        st.download_button(
-            label="📥 Download AP Cover Image",
-            data=st.session_state.cover_image_data,
-            file_name="ap_cover.png",
-            mime="image/png",
-            key="download_cover"
-        )
-        
-        # Download direct story
-        st.download_button(
-            label="📥 Download Direct Story",
-            data=st.session_state.story_direct,
-            file_name="direct_story.txt",
-            mime="text/plain",
-            key="download_story_direct"
-        )
-        
-        # Download direct cover image
-        st.download_button(
-            label="📥 Download Direct Cover Image",
-            data=st.session_state.cover_image_data_direct,
-            file_name="direct_cover.png",
-            mime="image/png",
-            key="download_cover_direct"
-        )
-    
-    with col3:
-        # Download evolved images
-        for i, img_bytes in enumerate(st.session_state.image_data):
-            stage_name = ["Ferment", "Take-off", "Maturity"][i]
             st.download_button(
-                label=f"📥 Download {stage_name} Image",
-                data=img_bytes,
-                file_name=f"stage{i+1}_{stage_name.lower()}.png",
-                mime="image/png",
-                key=f"download_stage{i+1}"
+                label="📥 Download SF Story (.txt)",
+                data=st.session_state.story,
+                file_name=f"sf_story_{st.session_state.topic}.txt",
+                mime="text/plain"
+            )
+        with col2:
+            ap_json = json.dumps(st.session_state.ap_history, ensure_ascii=False, indent=2)
+            st.download_button(
+                label="📥 Download AP Model (JSON)",
+                data=ap_json,
+                file_name=f"ap_model_{st.session_state.topic}.json",
+                mime="application/json"
             )
 
-    # Add button to switch to visualization page
-    if st.button("🔎 Visualize AP Model", type="primary"):
-        st.session_state.page = "visualization"
+    # --- Reset Button ---
+    st.markdown("---")
+    if st.button("🔄 Generate with New Theme"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
         st.rerun()
-
-    
-    # Reset button
-    if st.button("🔄 Generate New Story", type="primary"):
-        # Reset session state
-        st.session_state.generated = False
-        st.session_state.bg_history = []
-        st.session_state.description_history = []
-        st.session_state.story = ""
-        st.session_state.story_direct = ""
-        st.session_state.image_data = []
-        st.session_state.cover_image_data = None
-        st.session_state.cover_image_data_direct = None
-        st.session_state.demo_clicked = False
-        st.rerun()
-
-else:
-    # Show instructions when not running
-    st.subheader("Instructions")
-    st.markdown("""
-    1. Fill in the left panel input fields:
-       - Product Name
-       - Positive feedback
-       - Potential problem
-    2. Upload a product image
-    3. Click "Generate Story" button
-    4. Wait for processing to complete and download results
-    
-    **Or simply click the "Generate Demo" button in the sidebar to try with the smartphone example!**
-    **However, our budget is not enough, so please do not try too many times.**
-    """)
-    
-    # Show example
-    st.subheader("Example")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("""
-        **Product Name:** Smartphone
-        
-        **User Experience:**  
-        It allows me talk with my parents from anywhere in the world.
-        
-        **Avant-garde Issue:**  
-        People spend too much time on it.
-        """)
-        
-    with col2:
-        # Display the demo smartphone image if available
-        try:
-            example_img = Image.open("smartphone_demo.jpg")
-            st.image(example_img, caption="Example: Smartphone", use_container_width=True)
-        except:
-            st.info("Demo image will be displayed when the demo is generated.")
-
-# Sidebar footer
-st.sidebar.markdown("---")
-st.sidebar.markdown("Made by Zhang Menghan using Streamlit")
-
-# ========== Sidebar footer ==========
-st.sidebar.markdown("---")
-st.sidebar.markdown("Made by Zhang Menghan using Streamlit")
