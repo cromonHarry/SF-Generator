@@ -140,7 +140,7 @@ def build_ap_element(product: str, element_type: str, element_name: str, answer:
 Build an AP element for {element_name} of {product} based on the following information:
 Information: {answer}
 Output in the following JSON format:
-{{"type": "{element_name}", "definition": "Specific and concise definition (within 100 characters)", "example": "Specific example related to this object"}}
+{{"type": "{element_name}", "definition": "Specific and concise definition (within 30 characters)", "example": "Specific example related to this object"}}
 """
     else:
         arrow_info = AP_MODEL_STRUCTURE["arrows"][element_name]
@@ -148,7 +148,7 @@ Output in the following JSON format:
 Build an AP element for {element_name} ({arrow_info['from']} → {arrow_info['to']}) of {product} based on the following information:
 Information: {answer}
 Output in the following JSON format:
-{{"source": "{arrow_info['from']}", "target": "{arrow_info['to']}", "type": "{element_name}", "definition": "Specific explanation of transformation relationship (within 100 characters)", "example": "Specific example related to this arrow"}}
+{{"source": "{arrow_info['from']}", "target": "{arrow_info['to']}", "type": "{element_name}", "definition": "Specific explanation of transformation relationship (within 30 characters)", "example": "Specific example related to this arrow"}}
 """
     try:
         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"})
@@ -194,7 +194,7 @@ def build_stage1_ap_with_tavily(product: str, status_container):
             if answer_text: all_answers.append(answer_text)
     
     status_container.write("Generating introduction...")
-    intro_prompt = f"Based on the following information about {product} from various perspectives, create a concise introduction within 100 words in English about what {product} is.\n### Collected Information:\n{''.join(all_answers)}"
+    intro_prompt = f"Based on the following information about {product} from various perspectives, create a concise introduction within 50 words in English about what {product} is.\n### Collected Information:\n{''.join(all_answers)}"
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": intro_prompt}], temperature=0)
     introduction = response.choices[0].message.content
     return introduction, ap_model
@@ -230,7 +230,7 @@ As {agent['name']}, with expertise in {agent['expertise']} and characteristics o
 {context_info}
 {history_info}
 **Important**: Avoid duplicating past proposals and provide new approaches from different angles. Avoid same or similar proposals and present completely new approaches utilizing your expertise.
-From your expertise and perspective, creatively and innovatively generate content for "{element_type}" in the next stage. Based on S-curve theory, consider development from the previous stage and new possibilities, and provide your unique, outstanding, and imaginative ideas **in text content only, within 200 words. No JSON format or extra explanations needed.**
+From your expertise and perspective, creatively and innovatively generate content for "{element_type}" in the next stage. Based on S-curve theory, consider development from the previous stage and new possibilities, and provide your unique, outstanding, and imaginative ideas **in text content only, within 30 words. No JSON format or extra explanations needed.**
 """
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2)
     return response.choices[0].message.content.strip()
@@ -256,7 +256,7 @@ The following are the results of 3 iterations for generating "{element_type}" of
 ##Iteration 3 result:
 {json.dumps(iteration_results[2], ensure_ascii=False, indent=2)}
 Output in the following JSON format:
-{{ "final_selected_iteration": "Selected iteration number (1, 2, or 3)", "final_selection_reason": "Final selection reason (within 200 words)", "final_selected_content": "Final selected content of {element_type}" }}
+{{ "final_selected_iteration": "Selected iteration number (1, 2, or 3)", "final_selection_reason": "Final selection reason (within 30 words)", "final_selected_content": "Final selected content of {element_type}" }}
 """
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2, response_format={"type": "json_object"})
     return parse_json_response(response.choices[0].message.content)
@@ -315,7 +315,7 @@ Daily Spaces and User Experience: {new_elements["Daily Spaces and User Experienc
 Avant-garde Social Issues: {new_elements["Avant-garde Social Issues"]}
 ##User's future vision:
 {user_vision}
-Create a concise introduction within 100 words in English about what the situation of {topic} in Stage {stage} would be like.
+Create a concise introduction within 30 words in English about what the situation of {topic} in Stage {stage} would be like.
 """
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=0)
     return response.choices[0].message.content.strip()
@@ -342,7 +342,7 @@ def generate_story(theme: str, outline: str) -> str:
 You are a professional SF writer. Based on the following synopsis, write a short SF novel with the theme "{theme}".
 ## Story Synopsis:
 {outline}
-Write a coherent story following this synopsis. The story should be innovative, compelling, and follow the SF style. Please write approximately 1500 words in English.
+Write a coherent story following this synopsis. The story should be innovative, compelling, and follow the SF style. Please write approximately 500 words in English.
 """
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}])
     return response.choices[0].message.content
