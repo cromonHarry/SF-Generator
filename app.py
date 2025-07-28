@@ -435,7 +435,7 @@ if not st.session_state.process_started:
     st.markdown("Enter the **theme** you want to explore and the **setting** for the story. AI will predict the future in 3 stages and automatically generate an SF novel to completion.")
     
     topic_input = st.text_input("Enter the theme you want to explore", placeholder="e.g., AI, autonomous driving, quantum computing")
-    scene_input = st.text_area("Describe the story setting in detail", placeholder="e.g., A futuristic city at sunset, a quantum research lab")
+    scene_input = st.text_area("Describe the story senerio in detail", placeholder="e.g., A futuristic city at sunset, a quantum research lab")
 
     if st.button("Start AP & Story Generation →", type="primary", disabled=not topic_input or not scene_input):
         st.session_state.topic = topic_input
