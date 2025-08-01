@@ -431,7 +431,7 @@ def validate_openai_key(api_key: str) -> bool:
         test_client = OpenAI(api_key=api_key)
         # Make a minimal test call
         response = test_client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[{"role": "user", "content": "Hi"}],
             max_tokens=5
         )
