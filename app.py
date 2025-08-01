@@ -433,7 +433,6 @@ def validate_openai_key(api_key: str) -> bool:
         response = test_client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": "Hi"}],
-            max_tokens=5
         )
         return True
     except Exception:
