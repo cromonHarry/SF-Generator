@@ -1,5 +1,5 @@
 # =======================================================
-# Enhanced SF Generator - Demonstration Specialized Version (Auto-Execution)
+# Enhanced SF Generator - Compressed Demo Version (2-Stage, 2-Agent, 1-Iteration)
 # =======================================================
 import streamlit as st
 import json
@@ -58,10 +58,9 @@ This model can also be considered as a directed graph. It consists of 6 objects 
 11. Business Ecosystem: Networks formed by stakeholders related to products and services that compose daily spaces and user experiences to maintain them. Converts daily spaces and user experiences to institutions. (Daily Spaces and User Experience -> Institutions)
 12. Art (Social Criticism): Beliefs of people who view issues that people don't notice from subjective/intrinsic perspectives. Has the role of feeling discomfort with daily spaces and user experiences and presenting issues. Converts daily spaces and user experiences to avant-garde social issues. (Daily Spaces and User Experience -> Avant-garde Social Issues)
 
-###The S-curve is a model representing the evolution of technology over time. It consists of the following three stages:
+###The S-curve is a model representing the evolution of technology over time. It consists of the following two stages:
 ##Stage 1: Ferment Period: In this stage, technological development progresses steadily, but its progress is gradual. Focus is mainly on solving existing problems and improving current functions. At the end of this period, current problems are solved while new problems emerge.
 ##Stage 2: Take-off Period: In this stage, technology enters a rapid growth period. Various innovative ideas are proposed, and they eventually combine to create completely new forms of technology. At the end of this period, technology achieves great development while also causing new problems.
-##Stage 3: Maturity Period: In this stage, technological development becomes gradual again. While solving problems that occurred in the previous period, technology evolves into a more stable and mature state.
 """
 
 AP_MODEL_STRUCTURE = {
@@ -207,10 +206,10 @@ def build_stage1_ap_with_tavily(client, tavily_client, product: str, status_cont
     introduction = response.choices[0].message.content
     return introduction, ap_model
 
-# ========== Stage 2 & 3: Multi-Agent Functions ==========
+# ========== Stage 2: Multi-Agent Functions (Modified for 2 agents, 1 iteration) ==========
 def generate_agents(client, topic: str) -> list:
     prompt = f"""
-Generate 3 completely different expert agents for generating AP model elements about the theme "{topic}".
+Generate 2 completely different expert agents for generating AP model elements about the theme "{topic}".
 Each agent must have different perspectives and expertise, and be able to provide creative and innovative future predictions.
 Output in the following JSON format:
 {{ "agents": [ {{ "name": "Agent name", "expertise": "Field of expertise", "personality": "Personality/characteristics", "perspective": "Unique perspective" }} ] }}
@@ -219,14 +218,12 @@ Output in the following JSON format:
     result = parse_json_response(response.choices[0].message.content)
     return result["agents"]
 
-def agent_generate_element(client, agent: dict, topic: str, element_type: str, previous_stage_ap: dict, user_vision: str, context: dict, previous_proposals: list) -> str:
+def agent_generate_element(client, agent: dict, topic: str, element_type: str, previous_stage_ap: dict, user_vision: str, context: dict) -> str:
     context_info = ""
     if element_type == "Daily Spaces and User Experience": 
         context_info = f"##New Technology and Resources:\n{context.get('Technology and Resources', '')}"
     elif element_type == "Avant-garde Social Issues": 
         context_info = f"##New Technology and Resources:\n{context.get('Technology and Resources', '')}\n##New Daily Spaces and User Experience:\n{context.get('Daily Spaces and User Experience', '')}"
-    
-    history_info = "\n##Your past proposals (avoid duplication):\n" + "".join([f"Proposal {i+1}: {p}\n" for i, p in enumerate(previous_proposals)]) if previous_proposals else ""
     
     prompt = f"""
 As {agent['name']}, with expertise in {agent['expertise']} and characteristics of {agent['personality']}, analyze from the unique perspective of {agent['perspective']}.
@@ -236,8 +233,6 @@ As {agent['name']}, with expertise in {agent['expertise']} and characteristics o
 ##User's future vision:
 {user_vision}
 {context_info}
-{history_info}
-**Important**: Avoid duplicating past proposals and provide new approaches from different angles. Avoid same or similar proposals and present completely new approaches utilizing your expertise.
 From your expertise and perspective, creatively and innovatively generate content for "{element_type}" in the next stage. Based on S-curve theory, consider development from the previous stage and new possibilities, and provide your unique, outstanding, and imaginative ideas **in text content only, within 30 words. No JSON format or extra explanations needed.**
 """
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2)
@@ -254,44 +249,32 @@ Output in the following JSON format:
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2, response_format={"type": "json_object"})
     return parse_json_response(response.choices[0].message.content)
 
-def final_judge_best_iteration_element(client, iteration_results: list, element_type: str, topic: str) -> dict:
-    prompt = f"""
-The following are the results of 3 iterations for generating "{element_type}" of "{topic}". Comprehensively evaluate the improvement effects of each iteration and make the final selection of the best proposal.
-##Iteration 1 result:
-{json.dumps(iteration_results[0], ensure_ascii=False, indent=2)}
-##Iteration 2 result:
-{json.dumps(iteration_results[1], ensure_ascii=False, indent=2)}
-##Iteration 3 result:
-{json.dumps(iteration_results[2], ensure_ascii=False, indent=2)}
-Output in the following JSON format:
-{{ "final_selected_iteration": "Selected iteration number (1, 2, or 3)", "final_selection_reason": "Final selection reason (within 30 words)", "final_selected_content": "Final selected content of {element_type}" }}
-"""
-    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2, response_format={"type": "json_object"})
-    return parse_json_response(response.choices[0].message.content)
-
 def generate_single_element_with_iterations(client, status_container, topic: str, element_type: str, previous_stage_ap: dict, agents: list, user_vision: str, context: dict) -> dict:
-    iteration_results = []
-    agent_history = {agent['name']: [] for agent in agents}
-    for iteration in range(1, 4):
-        status_container.write(f"    - Iteration {iteration}/3: {len(agents)} agents generating proposals...")
-        proposals = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(agents)) as executor:
-            future_to_agent = {executor.submit(agent_generate_element, client, agent, topic, element_type, previous_stage_ap, user_vision, context, agent_history[agent['name']]): agent for agent in agents}
-            for future in concurrent.futures.as_completed(future_to_agent):
-                agent = future_to_agent[future]
-                try:
-                    proposal_content = future.result()
-                    proposals.append({"agent_name": agent['name'], "proposal": proposal_content})
-                    agent_history[agent['name']].append(proposal_content)
-                except Exception as exc: st.warning(f"Error in proposal generation by {agent['name']}: {exc}")
-        if not proposals: continue
-        status_container.write(f"    - Iteration {iteration}/3: Evaluation by judge...")
-        judgment = judge_element_proposals(client, proposals, element_type, topic)
-        iteration_results.append({"iteration_number": iteration, "all_agent_proposals": proposals, "judgment": judgment})
-    if not iteration_results: return {"element_type": element_type, "error": "No proposals were generated."}
-    status_container.write(f"  - Final judgment for '{element_type}'...")
-    final_judgment = final_judge_best_iteration_element(client, iteration_results, element_type, topic)
-    return {"element_type": element_type, "iterations": iteration_results, "final_decision": final_judgment}
+    # Single iteration only
+    status_container.write(f"    - Generating {len(agents)} agent proposals...")
+    proposals = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(agents)) as executor:
+        future_to_agent = {executor.submit(agent_generate_element, client, agent, topic, element_type, previous_stage_ap, user_vision, context): agent for agent in agents}
+        for future in concurrent.futures.as_completed(future_to_agent):
+            agent = future_to_agent[future]
+            try:
+                proposal_content = future.result()
+                proposals.append({"agent_name": agent['name'], "proposal": proposal_content})
+            except Exception as exc: 
+                st.warning(f"Error in proposal generation by {agent['name']}: {exc}")
+    
+    if not proposals:
+        return {"element_type": element_type, "error": "No proposals were generated."}
+    
+    status_container.write(f"    - Evaluating proposals...")
+    judgment = judge_element_proposals(client, proposals, element_type, topic)
+    
+    # Return single iteration result
+    return {
+        "element_type": element_type, 
+        "iteration": {"iteration_number": 1, "all_agent_proposals": proposals, "judgment": judgment},
+        "final_decision": {"final_selected_content": judgment["selected_content"], "final_selection_reason": judgment["selection_reason"]}
+    }
 
 def build_complete_ap_model(client, topic: str, previous_ap: dict, new_elements: dict, stage: int, user_vision: str) -> dict:
     prompt = f"""
@@ -328,19 +311,17 @@ Create a concise introduction within 30 words in English about what the situatio
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=0)
     return response.choices[0].message.content.strip()
 
-# ========== Story Generation Functions ==========
+# ========== Story Generation Functions (Modified for 2 stages) ==========
 def generate_outline(client, theme: str, scene: str, ap_model_history: list) -> str:
     prompt = f"""
 You are a professional SF writer. Based on the following information, create a synopsis for a short SF novel with the theme "{theme}".
 ## Story Setting:
 {scene}
-## Story Beginning (S-curve Stage 2):
-{json.dumps(ap_model_history[1]['ap_model'], ensure_ascii=False, indent=2)}
-## Story Ending (S-curve Stage 3):
-{json.dumps(ap_model_history[2]['ap_model'], ensure_ascii=False, indent=2)}
 ## Story Background (S-curve Stage 1):
 {json.dumps(ap_model_history[0]['ap_model'], ensure_ascii=False, indent=2)}
-Based on the above information, create a story synopsis that includes the main plot, characters, and central conflicts unfolding in the specified setting. The synopsis should be innovative and compelling, following the style of SF novels.
+## Story Development (S-curve Stage 2):
+{json.dumps(ap_model_history[1]['ap_model'], ensure_ascii=False, indent=2)}
+Based on the above information, create a story synopsis that includes the main plot, characters, and central conflicts unfolding in the specified setting. The synopsis should be innovative and compelling, following the style of SF novels. The story should focus on the transition from Stage 1 to Stage 2.
 """
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}])
     return response.choices[0].message.content
@@ -355,7 +336,7 @@ Write a coherent story following this synopsis. The story should be innovative, 
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}])
     return response.choices[0].message.content
 
-# ========== UI Functions for Visualization ==========
+# ========== UI Functions for Visualization (Modified for 2 stages) ==========
 def show_visualization(ap_history, height=750):
     """Generate and display visualization HTML based on AP model history"""
     if not ap_history:
@@ -398,31 +379,25 @@ def show_visualization(ap_history, height=750):
     st.components.v1.html(html_content, height=height, scrolling=True)
 
 def show_agent_proposals(element_result):
-    """Display multi-agent proposal results nicely"""
+    """Display multi-agent proposal results nicely (Modified for single iteration)"""
     st.markdown(f"#### 🧠 Generation Process for '{element_result['element_type']}'")
     
-    for iteration in element_result['iterations']:
-        st.markdown(f"---")
-        st.markdown(f"##### Iteration {iteration['iteration_number']}/3")
-        
-        st.markdown("###### 🤖 Proposals from Each Agent")
-        cols = st.columns(len(iteration['all_agent_proposals']))
-        for i, proposal in enumerate(iteration['all_agent_proposals']):
-            with cols[i]:
-                st.markdown(f"**{proposal['agent_name']}**")
-                st.info(proposal['proposal'])
-        
-        st.markdown("###### 🎯 Judgment Result")
-        judgment = iteration['judgment']
-        st.success(f"**Selected Proposal:** {judgment['selected_proposal']}")
-        st.write(f"**Selected Content:** {judgment['selected_content']}")
-        st.write(f"**Selection Reason:** {judgment['selection_reason']}")
+    # Single iteration display
+    iteration = element_result['iteration']
+    st.markdown(f"##### Agent Proposals")
     
-    st.markdown("---")
-    st.markdown("##### 🏆 Final Decision")
-    final_decision = element_result['final_decision']
-    st.success(f"**Finally Selected Content (from Iteration {final_decision['final_selected_iteration']}):**")
-    st.info(f"{final_decision['final_selected_content']}")
+    st.markdown("###### 🤖 Proposals from Each Agent")
+    cols = st.columns(len(iteration['all_agent_proposals']))
+    for i, proposal in enumerate(iteration['all_agent_proposals']):
+        with cols[i]:
+            st.markdown(f"**{proposal['agent_name']}**")
+            st.info(proposal['proposal'])
+    
+    st.markdown("###### 🎯 Judgment Result")
+    judgment = iteration['judgment']
+    st.success(f"**Selected Proposal:** {judgment['selected_proposal']}")
+    st.write(f"**Selected Content:** {judgment['selected_content']}")
+    st.write(f"**Selection Reason:** {judgment['selection_reason']}")
 
 # ========== API Key Validation Function ==========
 def validate_openai_key(api_key: str) -> bool:
@@ -439,7 +414,7 @@ def validate_openai_key(api_key: str) -> bool:
         return False
 
 # ========== Main UI & State Management ==========
-st.title("🚀 Near-Future SF Generator")
+st.title("🚀 Near-Future SF Generator (Demo Version)")
 
 # --- Session State Initialization ---
 if 'process_started' not in st.session_state:
@@ -451,13 +426,13 @@ if 'process_started' not in st.session_state:
     st.session_state.descriptions = []
     st.session_state.story = ""
     st.session_state.agents = []
-    st.session_state.stage_elements_results = {'stage2': [], 'stage3': []}
+    st.session_state.stage_elements_results = {'stage2': []}
     st.session_state.client = None
     st.session_state.tavily_client = None
 
 # --- STEP 0: Initial Input Screen ---
 if not st.session_state.process_started:
-    st.markdown("Enter your **OpenAI API key**, the **theme** you want to explore and the **setting** for the story. AI will predict the future in 3 stages and automatically generate an SF novel to completion.")
+    st.markdown("Enter your **OpenAI API key**, the **theme** you want to explore and the **setting** for the story. AI will predict the future in 2 stages and automatically generate an SF novel to completion.")
     
     # API Key input
     st.markdown("### 🔑 API Configuration")
@@ -544,17 +519,6 @@ else:
 
     if len(st.session_state.ap_history) >= 2:
         st.info(st.session_state.descriptions[1])
-        show_visualization(st.session_state.ap_history[0:2])
-
-    # --- Stage 3 Display ---
-    if st.session_state.stage_elements_results['stage3']:
-        st.markdown("---")
-        st.header("Stage 3: Maturity Period (Maturity Prediction)")
-        for result in st.session_state.stage_elements_results['stage3']:
-            show_agent_proposals(result)
-            
-    if len(st.session_state.ap_history) >= 3:
-        st.info(st.session_state.descriptions[2])
         show_visualization(st.session_state.ap_history)
 
     # --- Story Display ---
@@ -565,8 +529,8 @@ else:
         st.markdown("### 📚 Generated SF Short Story")
         st.text_area("SF Story", st.session_state.story, height=400)
         
-        with st.expander("📈 View Summary of 3-Stage Future Predictions"):
-            stages_info = ["Stage 1: Ferment Period", "Stage 2: Take-off Period", "Stage 3: Maturity Period"]
+        with st.expander("📈 View Summary of 2-Stage Future Predictions"):
+            stages_info = ["Stage 1: Ferment Period", "Stage 2: Take-off Period"]
             for i, stage_name in enumerate(stages_info):
                 st.markdown(f"**{stage_name}**")
                 st.info(st.session_state.descriptions[i])
@@ -614,28 +578,8 @@ else:
                 st.session_state.ap_history.append({"stage": 2, "ap_model": model2})
             st.rerun()
 
-    # --- Stage 3 Generation (Step by Step) ---
-    elif len(st.session_state.ap_history) == 2:
-        s3_results = st.session_state.stage_elements_results['stage3']
-        element_sequence = ["Technology and Resources", "Daily Spaces and User Experience", "Avant-garde Social Issues"]
-        if len(s3_results) < len(element_sequence):
-            elem_type = element_sequence[len(s3_results)]
-            with st.status(f"Stage 3: Generating '{elem_type}'...", expanded=True) as status:
-                context = {r['element_type']: r['final_decision']['final_selected_content'] for r in s3_results}
-                result = generate_single_element_with_iterations(st.session_state.client, status, st.session_state.topic, elem_type, st.session_state.ap_history[1]['ap_model'], st.session_state.agents, user_vision, context)
-                s3_results.append(result)
-            st.rerun()
-        else:
-            with st.status("Stage 3: Building complete AP model...", expanded=True) as status:
-                context2 = {r['element_type']: r['final_decision']['final_selected_content'] for r in s3_results}
-                model3 = build_complete_ap_model(st.session_state.client, st.session_state.topic, st.session_state.ap_history[1]['ap_model'], context2, 3, user_vision)
-                intro3 = generate_stage_introduction(st.session_state.client, st.session_state.topic, 3, context2, user_vision)
-                st.session_state.descriptions.append(intro3)
-                st.session_state.ap_history.append({"stage": 3, "ap_model": model3})
-            st.rerun()
-
     # --- Story Generation ---
-    elif len(st.session_state.ap_history) == 3 and not st.session_state.story:
+    elif len(st.session_state.ap_history) == 2 and not st.session_state.story:
         with st.spinner("Final stage: Generating SF story synopsis..."):
             outline = generate_outline(st.session_state.client, st.session_state.topic, st.session_state.scene, st.session_state.ap_history)
         with st.spinner("Final stage: Generating SF short story from synopsis..."):
