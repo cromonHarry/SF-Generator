@@ -1,6 +1,7 @@
 streamlit==1.45.0
 websockets==15.0.1
-openai==1.77.0
+#openai==1.77.0
+openai==1.107.3
 pillow==10.2.0
 networkx==3.2.1
 matplotlib==3.9.2
