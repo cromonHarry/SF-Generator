@@ -107,7 +107,7 @@ The question should meet the following conditions:
 - A question that would likely yield good results in a search engine
 Output only the question:
 """
-    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}], temperature=0)
+    response = client.chat.completions.create(model="gpt-5", messages=[{"role": "user", "content": prompt}])
     return response.choices[0].message.content.strip()
 
 def generate_question_for_arrow(product: str, arrow_name: str, arrow_info: dict) -> str:
@@ -123,7 +123,7 @@ The question should meet the following conditions:
 - A question that can discover specific cases or relationships in {product}
 Output only the question:
 """
-    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}], temperature=0)
+    response = client.chat.completions.create(model="gpt-5", messages=[{"role": "user", "content": prompt}])
     return response.choices[0].message.content.strip()
 
 def search_and_get_answer(question: str) -> str:
@@ -152,7 +152,7 @@ Output in the following JSON format:
 {{"source": "{arrow_info['from']}", "target": "{arrow_info['to']}", "type": "{element_name}", "definition": "Specific explanation of transformation relationship (within 30 words)", "example": "Specific example related to this arrow"}}
 """
     try:
-        response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"})
+        response = client.chat.completions.create(model="gpt-5", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"})
         return json.loads(response.choices[0].message.content.strip())
     except Exception: return None
 
@@ -196,7 +196,7 @@ def build_stage1_ap_with_tavily(product: str, status_container):
     
     status_container.write("Generating introduction...")
     intro_prompt = f"Based on the following information about {product} from various perspectives, create a concise introduction within 50 words in English about what {product} is.\n### Collected Information:\n{''.join(all_answers)}"
-    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": intro_prompt}], temperature=0)
+    response = client.chat.completions.create(model="gpt-5", messages=[{"role": "user", "content": intro_prompt}])
     introduction = response.choices[0].message.content
     return introduction, ap_model
 
@@ -208,7 +208,7 @@ Each agent must have different perspectives and expertise, and be able to provid
 Output in the following JSON format:
 {{ "agents": [ {{ "name": "Agent name", "expertise": "Field of expertise", "personality": "Personality/characteristics", "perspective": "Unique perspective" }} ] }}
 """
-    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2, response_format={"type": "json_object"})
+    response = client.chat.completions.create(model="gpt-5", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2, response_format={"type": "json_object"})
     result = parse_json_response(response.choices[0].message.content)
     return result["agents"]
 
@@ -229,7 +229,7 @@ As {agent['name']}, with expertise in {agent['expertise']} and characteristics o
 {context_info}
 From your expertise and perspective, creatively and innovatively generate content for "{element_type}" in the next stage. Based on S-curve theory, consider development from the previous stage and new possibilities, and provide your unique, outstanding, and imaginative ideas **in text content only, within 50 words. No JSON format or extra explanations needed.**
 """
-    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2)
+    response = client.chat.completions.create(model="gpt-5", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2)
     return response.choices[0].message.content.strip()
 
 def judge_element_proposals(proposals: list[dict], element_type: str, topic: str) -> dict:
@@ -240,7 +240,7 @@ The following are {len(proposals)} proposals for "{element_type}" regarding "{to
 Output in the following JSON format:
 {{ "selected_proposal": "Agent name of selected proposal", "selected_content": "Content of selected {element_type} proposal", "selection_reason": "Selection reason (within 150 words)", "creativity_score": "Creativity evaluation (1-10)", "future_vision_score": "Future vision evaluation (1-10)" }}
 """
-    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2, response_format={"type": "json_object"})
+    response = client.chat.completions.create(model="gpt-5", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2, response_format={"type": "json_object"})
     return parse_json_response(response.choices[0].message.content)
 
 def generate_single_element_with_iterations(status_container, topic: str, element_type: str, previous_stage_ap: dict, agents: list, user_vision: str, context: dict) -> dict:
@@ -288,7 +288,7 @@ Center on the newly generated 3 elements, update other elements with content app
 Output in the following JSON format:
 {{"nodes": [{{"type": "Object name", "definition": "Description of this object", "example": "Specific example of this object"}}], "arrows": [{{"source": "Source object", "target": "Target object", "type": "Arrow name", "definition": "Description of this arrow", "example": "Specific example of this arrow"}}]}}
 """
-    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], response_format={"type": "json_object"})
+    response = client.chat.completions.create(model="gpt-5", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], response_format={"type": "json_object"})
     return parse_json_response(response.choices[0].message.content)
 
 def generate_stage_introduction(topic: str, stage: int, new_elements: dict, user_vision: str) -> str:
@@ -302,7 +302,7 @@ Avant-garde Social Issues: {new_elements["Avant-garde Social Issues"]}
 {user_vision}
 Create a concise introduction within 50 words in English about what the situation of {topic} in Stage {stage} would be like.
 """
-    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=0)
+    response = client.chat.completions.create(model="gpt-5", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}])
     return response.choices[0].message.content.strip()
 
 # ========== Story Generation Functions (Modified for 2 stages) ==========
@@ -317,7 +317,7 @@ You are a professional SF writer. Based on the following information, create a s
 {json.dumps(ap_model_history[1]['ap_model'], ensure_ascii=False, indent=2)}
 Based on the above information, create a story synopsis that includes the main plot, characters, and central conflicts unfolding in the specified setting. The synopsis should be innovative and compelling, following the style of SF novels. The story should focus on the transition from Stage 1 to Stage 2.
 """
-    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}])
+    response = client.chat.completions.create(model="gpt-5", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}])
     return response.choices[0].message.content
 
 def generate_story(theme: str, outline: str) -> str:
@@ -327,7 +327,7 @@ You are a professional SF writer. Based on the following synopsis, write a short
 {outline}
 Write a coherent story following this synopsis. The story should be innovative, compelling, and follow the SF style. Please write approximately 500 words in English.
 """
-    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}])
+    response = client.chat.completions.create(model="gpt-5", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}])
     return response.choices[0].message.content
 
 # ========== UI Functions for Visualization (Modified for 2 stages) ==========
