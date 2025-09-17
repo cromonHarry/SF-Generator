@@ -774,6 +774,7 @@ with st.sidebar:
     use_realtime_api = st.checkbox(
         "Use Realtime API (Experimental)", 
         value=False,
+        key="realtime_api_toggle",
         help="Enable this to use OpenAI's new Realtime API. Note: This is experimental and may have limitations."
     )
     
