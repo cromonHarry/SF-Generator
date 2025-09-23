@@ -330,6 +330,29 @@ Write a coherent story following this synopsis. The story should be innovative, 
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}])
     return response.choices[0].message.content
 
+# ADDED: Function to generate story summary
+def generate_story_summary(story_text: str, creative_ideas: list) -> str:
+    """Generates a summary of the story, highlighting key creative ideas."""
+    ideas_text = ", ".join(f"'{idea}'" for idea in creative_ideas)
+    prompt = f"""
+Please create a concise summary of the following science fiction story in English, within 10 sentences.
+In the summary, you must identify and emphasize the key creative concepts that were central to the story's development by making them bold (using Markdown's **bold** format).
+
+List of Key Creative Concepts to highlight: {ideas_text}
+
+Full Story Text:
+---
+{story_text}
+---
+
+Your output should be the English summary only.
+"""
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response.choices[0].message.content.strip()
+
 # ========== UI Functions for Visualization (Modified for 2 stages) ==========
 def show_visualization(ap_history, height=750):
     """Generate and display visualization HTML based on AP model history"""
@@ -404,6 +427,7 @@ if 'process_started' not in st.session_state:
     st.session_state.ap_history = []
     st.session_state.descriptions = []
     st.session_state.story = ""
+    st.session_state.story_summary = "" # ADDED: Initialize story_summary
     st.session_state.agents = []
     st.session_state.stage_elements_results = {'stage2': []}
 
@@ -466,6 +490,10 @@ else:
         st.markdown("### 📚 Generated SF Short Story")
         st.text_area("SF Story", st.session_state.story, height=400)
         
+        # ADDED: Display for Story Summary
+        st.markdown("### 📖 Story Summary")
+        st.markdown(st.session_state.story_summary)
+
         with st.expander("📈 View Summary of 2-Stage Future Predictions"):
             stages_info = ["Stage 1: Ferment Period", "Stage 2: Take-off Period"]
             for i, stage_name in enumerate(stages_info):
@@ -522,6 +550,17 @@ else:
         with st.spinner("Final stage: Generating SF short story from synopsis..."):
             story = generate_story(st.session_state.topic, outline)
             st.session_state.story = story
+        
+        # ADDED: Generate summary after story is created
+        with st.spinner("Final stage: Generating story summary..."):
+            # Collect creative ideas from stage 2
+            creative_ideas = [
+                r['final_decision']['final_selected_content']
+                for r in st.session_state.stage_elements_results['stage2']
+            ]
+            summary = generate_story_summary(st.session_state.story, creative_ideas)
+            st.session_state.story_summary = summary
+
         st.success("✅ All generation processes completed!")
         time.sleep(1)
         st.rerun()
