@@ -1,5 +1,5 @@
 # =======================================================
-# Enhanced SF Generator - Compressed Demo Version (2-Stage, 2-Agent, 1-Iteration)
+# Enhanced SF Generator - Demonstration Specialized Version (Auto-Execution)
 # =======================================================
 import streamlit as st
 import json
@@ -13,16 +13,21 @@ import concurrent.futures
 st.set_page_config(page_title="Near-Future SF Generator", layout="wide")
 
 # ========== Client Initialization ==========
-try:
-    # 直接从Streamlit secrets配置中读取API key
-    client = OpenAI(api_key=st.secrets["openai"]["api_key"])
-    tavily_client = TavilyClient(api_key=st.secrets["tavily"]["api_key"])
-except KeyError as e:
-    st.error(f"❌ API key not configured. Please check `{e.args[0]}` in Streamlit settings.")
-    st.stop()
-except Exception as e:
-    st.error(f"❌ API connection error: {str(e)}")
-    st.stop()
+def initialize_clients(openai_api_key=None):
+    """Initialize OpenAI and Tavily clients"""
+    try:
+        # Use user-provided key if available, otherwise fall back to secrets
+        if openai_api_key:
+            client = OpenAI(api_key=openai_api_key)
+        else:
+            client = OpenAI(api_key=st.secrets["openai"]["api_key"])
+        
+        # Tavily always uses system secrets for now
+        tavily_client = TavilyClient(api_key=st.secrets["tavily"]["api_key"])
+        
+        return client, tavily_client, None
+    except Exception as e:
+        return None, None, str(e)
 
 # ========== System Prompt & Constants ==========
 SYSTEM_PROMPT = """You are a science fiction expert who analyzes society based on the "Archaeological Prototyping (AP)" model. Here is an introduction to this model:
@@ -53,9 +58,10 @@ This model can also be considered as a directed graph. It consists of 6 objects 
 11. Business Ecosystem: Networks formed by stakeholders related to products and services that compose daily spaces and user experiences to maintain them. Converts daily spaces and user experiences to institutions. (Daily Spaces and User Experience -> Institutions)
 12. Art (Social Criticism): Beliefs of people who view issues that people don't notice from subjective/intrinsic perspectives. Has the role of feeling discomfort with daily spaces and user experiences and presenting issues. Converts daily spaces and user experiences to avant-garde social issues. (Daily Spaces and User Experience -> Avant-garde Social Issues)
 
-###The S-curve is a model representing the evolution of technology over time. It consists of the following two stages:
+###The S-curve is a model representing the evolution of technology over time. It consists of the following three stages:
 ##Stage 1: Ferment Period: In this stage, technological development progresses steadily, but its progress is gradual. Focus is mainly on solving existing problems and improving current functions. At the end of this period, current problems are solved while new problems emerge.
 ##Stage 2: Take-off Period: In this stage, technology enters a rapid growth period. Various innovative ideas are proposed, and they eventually combine to create completely new forms of technology. At the end of this period, technology achieves great development while also causing new problems.
+##Stage 3: Maturity Period: In this stage, technological development becomes gradual again. While solving problems that occurred in the previous period, technology evolves into a more stable and mature state.
 """
 
 AP_MODEL_STRUCTURE = {
@@ -83,6 +89,7 @@ AP_MODEL_STRUCTURE = {
     }
 }
 
+
 # ========== Helper Functions ==========
 def parse_json_response(gpt_output: str) -> dict:
     result_str = gpt_output.strip()
@@ -98,7 +105,7 @@ def parse_json_response(gpt_output: str) -> dict:
         raise e
 
 # ========== Stage 1: Tavily Functions ==========
-def generate_question_for_object(product: str, object_name: str, object_description: str) -> str:
+def generate_question_for_object(client, product: str, object_name: str, object_description: str) -> str:
     prompt = f"""
 Generate one natural and complete question about the AP model object "{object_name}" ({object_description}) regarding {product}.
 The question should meet the following conditions:
@@ -110,7 +117,7 @@ Output only the question:
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}], temperature=0)
     return response.choices[0].message.content.strip()
 
-def generate_question_for_arrow(product: str, arrow_name: str, arrow_info: dict) -> str:
+def generate_question_for_arrow(client, product: str, arrow_name: str, arrow_info: dict) -> str:
     prompt = f"""
 Generate a natural and complete question about the AP model arrow "{arrow_name}" regarding {product}.
 Arrow details:
@@ -126,7 +133,7 @@ Output only the question:
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}], temperature=0)
     return response.choices[0].message.content.strip()
 
-def search_and_get_answer(question: str) -> str:
+def search_and_get_answer(tavily_client, question: str) -> str:
     try:
         response = tavily_client.search(query=question, include_answer=True)
         answer = response.get('answer', '')
@@ -135,13 +142,13 @@ def search_and_get_answer(question: str) -> str:
         return results[0].get('content', "No information found") if results else "No information found"
     except Exception as e: return f"Search error: {str(e)}"
 
-def build_ap_element(product: str, element_type: str, element_name: str, answer: str) -> dict:
+def build_ap_element(client, product: str, element_type: str, element_name: str, answer: str) -> dict:
     if element_type == "object":
         prompt = f"""
 Build an AP element for {element_name} of {product} based on the following information:
 Information: {answer}
 Output in the following JSON format:
-{{"type": "{element_name}", "definition": "Specific and concise definition (within 30 words)", "example": "Specific example related to this object"}}
+{{"type": "{element_name}", "definition": "Specific and concise definition (within 30 characters)", "example": "Specific example related to this object"}}
 """
     else:
         arrow_info = AP_MODEL_STRUCTURE["arrows"][element_name]
@@ -149,23 +156,23 @@ Output in the following JSON format:
 Build an AP element for {element_name} ({arrow_info['from']} → {arrow_info['to']}) of {product} based on the following information:
 Information: {answer}
 Output in the following JSON format:
-{{"source": "{arrow_info['from']}", "target": "{arrow_info['to']}", "type": "{element_name}", "definition": "Specific explanation of transformation relationship (within 30 words)", "example": "Specific example related to this arrow"}}
+{{"source": "{arrow_info['from']}", "target": "{arrow_info['to']}", "type": "{element_name}", "definition": "Specific explanation of transformation relationship (within 30 characters)", "example": "Specific example related to this arrow"}}
 """
     try:
         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"})
         return json.loads(response.choices[0].message.content.strip())
     except Exception: return None
 
-def process_element(product: str, element_type: str, name: str, info: dict):
+def process_element(client, tavily_client, product: str, element_type: str, name: str, info: dict):
     try:
         if element_type == "object":
-            question = generate_question_for_object(product, name, info)
+            question = generate_question_for_object(client, product, name, info)
         else:
-            question = generate_question_for_arrow(product, name, info)
-        answer = search_and_get_answer(question)
+            question = generate_question_for_arrow(client, product, name, info)
+        answer = search_and_get_answer(tavily_client, question)
         if "Search error" in answer or not answer:
             return None, None
-        element_data = build_ap_element(product, element_type, name, answer)
+        element_data = build_ap_element(client, product, element_type, name, answer)
         if not element_data:
             return None, None
         return {"type": element_type, "name": name, "data": element_data}, f"## {name}\n{answer}"
@@ -173,7 +180,7 @@ def process_element(product: str, element_type: str, name: str, info: dict):
         st.warning(f"Error occurred while processing element '{name}': {e}")
         return None, None
 
-def build_stage1_ap_with_tavily(product: str, status_container):
+def build_stage1_ap_with_tavily(client, tavily_client, product: str, status_container):
     ap_model = {"nodes": [], "arrows": []}
     all_answers = []
     MAX_WORKERS = 5
@@ -184,7 +191,7 @@ def build_stage1_ap_with_tavily(product: str, status_container):
         tasks.append((product, "arrow", name, info))
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        future_to_task = {executor.submit(process_element, *task): task for task in tasks}
+        future_to_task = {executor.submit(process_element, client, tavily_client, *task): task for task in tasks}
         for future in concurrent.futures.as_completed(future_to_task):
             task_name = future_to_task[future][2]
             status_container.write(f"  - Searching element '{task_name}'...")
@@ -200,10 +207,10 @@ def build_stage1_ap_with_tavily(product: str, status_container):
     introduction = response.choices[0].message.content
     return introduction, ap_model
 
-# ========== Stage 2: Multi-Agent Functions (Modified for 2 agents, 1 iteration) ==========
-def generate_agents(topic: str) -> list:
+# ========== Stage 2 & 3: Multi-Agent Functions ==========
+def generate_agents(client, topic: str) -> list:
     prompt = f"""
-Generate 2 completely different expert agents for generating AP model elements about the theme "{topic}".
+Generate 3 completely different expert agents for generating AP model elements about the theme "{topic}".
 Each agent must have different perspectives and expertise, and be able to provide creative and innovative future predictions.
 Output in the following JSON format:
 {{ "agents": [ {{ "name": "Agent name", "expertise": "Field of expertise", "personality": "Personality/characteristics", "perspective": "Unique perspective" }} ] }}
@@ -212,12 +219,14 @@ Output in the following JSON format:
     result = parse_json_response(response.choices[0].message.content)
     return result["agents"]
 
-def agent_generate_element(agent: dict, topic: str, element_type: str, previous_stage_ap: dict, user_vision: str, context: dict) -> str:
+def agent_generate_element(client, agent: dict, topic: str, element_type: str, previous_stage_ap: dict, user_vision: str, context: dict, previous_proposals: list) -> str:
     context_info = ""
     if element_type == "Daily Spaces and User Experience": 
         context_info = f"##New Technology and Resources:\n{context.get('Technology and Resources', '')}"
     elif element_type == "Avant-garde Social Issues": 
         context_info = f"##New Technology and Resources:\n{context.get('Technology and Resources', '')}\n##New Daily Spaces and User Experience:\n{context.get('Daily Spaces and User Experience', '')}"
+    
+    history_info = "\n##Your past proposals (avoid duplication):\n" + "".join([f"Proposal {i+1}: {p}\n" for i, p in enumerate(previous_proposals)]) if previous_proposals else ""
     
     prompt = f"""
 As {agent['name']}, with expertise in {agent['expertise']} and characteristics of {agent['personality']}, analyze from the unique perspective of {agent['perspective']}.
@@ -227,12 +236,14 @@ As {agent['name']}, with expertise in {agent['expertise']} and characteristics o
 ##User's future vision:
 {user_vision}
 {context_info}
-From your expertise and perspective, creatively and innovatively generate content for "{element_type}" in the next stage. Based on S-curve theory, consider development from the previous stage and new possibilities, and provide your unique, outstanding, and imaginative ideas **in text content only, within 50 words. No JSON format or extra explanations needed.**
+{history_info}
+**Important**: Avoid duplicating past proposals and provide new approaches from different angles. Avoid same or similar proposals and present completely new approaches utilizing your expertise.
+From your expertise and perspective, creatively and innovatively generate content for "{element_type}" in the next stage. Based on S-curve theory, consider development from the previous stage and new possibilities, and provide your unique, outstanding, and imaginative ideas **in text content only, within 30 words. No JSON format or extra explanations needed.**
 """
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2)
     return response.choices[0].message.content.strip()
 
-def judge_element_proposals(proposals: list[dict], element_type: str, topic: str) -> dict:
+def judge_element_proposals(client, proposals: list[dict], element_type: str, topic: str) -> dict:
     proposals_text = "".join([f"##Proposal {i+1} (Agent: {p['agent_name']}):\n{p['proposal']}\n\n" for i, p in enumerate(proposals)])
     prompt = f"""
 The following are {len(proposals)} proposals for "{element_type}" regarding "{topic}". Evaluate each proposal from the perspectives of creativity and future vision, and select the most imaginative proposal.
@@ -243,34 +254,46 @@ Output in the following JSON format:
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2, response_format={"type": "json_object"})
     return parse_json_response(response.choices[0].message.content)
 
-def generate_single_element_with_iterations(status_container, topic: str, element_type: str, previous_stage_ap: dict, agents: list, user_vision: str, context: dict) -> dict:
-    # Single iteration only
-    status_container.write(f"    - Generating {len(agents)} agent proposals...")
-    proposals = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(agents)) as executor:
-        future_to_agent = {executor.submit(agent_generate_element, agent, topic, element_type, previous_stage_ap, user_vision, context): agent for agent in agents}
-        for future in concurrent.futures.as_completed(future_to_agent):
-            agent = future_to_agent[future]
-            try:
-                proposal_content = future.result()
-                proposals.append({"agent_name": agent['name'], "proposal": proposal_content})
-            except Exception as exc: 
-                st.warning(f"Error in proposal generation by {agent['name']}: {exc}")
-    
-    if not proposals:
-        return {"element_type": element_type, "error": "No proposals were generated."}
-    
-    status_container.write(f"    - Evaluating proposals...")
-    judgment = judge_element_proposals(proposals, element_type, topic)
-    
-    # Return single iteration result
-    return {
-        "element_type": element_type, 
-        "iteration": {"iteration_number": 1, "all_agent_proposals": proposals, "judgment": judgment},
-        "final_decision": {"final_selected_content": judgment["selected_content"], "final_selection_reason": judgment["selection_reason"]}
-    }
+def final_judge_best_iteration_element(client, iteration_results: list, element_type: str, topic: str) -> dict:
+    prompt = f"""
+The following are the results of 3 iterations for generating "{element_type}" of "{topic}". Comprehensively evaluate the improvement effects of each iteration and make the final selection of the best proposal.
+##Iteration 1 result:
+{json.dumps(iteration_results[0], ensure_ascii=False, indent=2)}
+##Iteration 2 result:
+{json.dumps(iteration_results[1], ensure_ascii=False, indent=2)}
+##Iteration 3 result:
+{json.dumps(iteration_results[2], ensure_ascii=False, indent=2)}
+Output in the following JSON format:
+{{ "final_selected_iteration": "Selected iteration number (1, 2, or 3)", "final_selection_reason": "Final selection reason (within 30 words)", "final_selected_content": "Final selected content of {element_type}" }}
+"""
+    response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=1.2, response_format={"type": "json_object"})
+    return parse_json_response(response.choices[0].message.content)
 
-def build_complete_ap_model(topic: str, previous_ap: dict, new_elements: dict, stage: int, user_vision: str) -> dict:
+def generate_single_element_with_iterations(client, status_container, topic: str, element_type: str, previous_stage_ap: dict, agents: list, user_vision: str, context: dict) -> dict:
+    iteration_results = []
+    agent_history = {agent['name']: [] for agent in agents}
+    for iteration in range(1, 4):
+        status_container.write(f"    - Iteration {iteration}/3: {len(agents)} agents generating proposals...")
+        proposals = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(agents)) as executor:
+            future_to_agent = {executor.submit(agent_generate_element, client, agent, topic, element_type, previous_stage_ap, user_vision, context, agent_history[agent['name']]): agent for agent in agents}
+            for future in concurrent.futures.as_completed(future_to_agent):
+                agent = future_to_agent[future]
+                try:
+                    proposal_content = future.result()
+                    proposals.append({"agent_name": agent['name'], "proposal": proposal_content})
+                    agent_history[agent['name']].append(proposal_content)
+                except Exception as exc: st.warning(f"Error in proposal generation by {agent['name']}: {exc}")
+        if not proposals: continue
+        status_container.write(f"    - Iteration {iteration}/3: Evaluation by judge...")
+        judgment = judge_element_proposals(client, proposals, element_type, topic)
+        iteration_results.append({"iteration_number": iteration, "all_agent_proposals": proposals, "judgment": judgment})
+    if not iteration_results: return {"element_type": element_type, "error": "No proposals were generated."}
+    status_container.write(f"  - Final judgment for '{element_type}'...")
+    final_judgment = final_judge_best_iteration_element(client, iteration_results, element_type, topic)
+    return {"element_type": element_type, "iterations": iteration_results, "final_decision": final_judgment}
+
+def build_complete_ap_model(client, topic: str, previous_ap: dict, new_elements: dict, stage: int, user_vision: str) -> dict:
     prompt = f"""
 Build the complete AP model for Stage {stage}.
 ##Previous stage information:
@@ -291,7 +314,7 @@ Output in the following JSON format:
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], response_format={"type": "json_object"})
     return parse_json_response(response.choices[0].message.content)
 
-def generate_stage_introduction(topic: str, stage: int, new_elements: dict, user_vision: str) -> str:
+def generate_stage_introduction(client, topic: str, stage: int, new_elements: dict, user_vision: str) -> str:
     prompt = f"""
 Create an introduction for Stage {stage} of {topic} based on the following newly generated elements.
 ##Generated elements:
@@ -300,27 +323,29 @@ Daily Spaces and User Experience: {new_elements["Daily Spaces and User Experienc
 Avant-garde Social Issues: {new_elements["Avant-garde Social Issues"]}
 ##User's future vision:
 {user_vision}
-Create a concise introduction within 50 words in English about what the situation of {topic} in Stage {stage} would be like.
+Create a concise introduction within 30 words in English about what the situation of {topic} in Stage {stage} would be like.
 """
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], temperature=0)
     return response.choices[0].message.content.strip()
 
-# ========== Story Generation Functions (Modified for 2 stages) ==========
-def generate_outline(theme: str, scene: str, ap_model_history: list) -> str:
+# ========== Story Generation Functions ==========
+def generate_outline(client, theme: str, scene: str, ap_model_history: list) -> str:
     prompt = f"""
 You are a professional SF writer. Based on the following information, create a synopsis for a short SF novel with the theme "{theme}".
 ## Story Setting:
 {scene}
+## Story Beginning (S-curve Stage 2):
+{json.dumps(ap_model_history[1]['ap_model'], ensure_ascii=False, indent=2)}
+## Story Ending (S-curve Stage 3):
+{json.dumps(ap_model_history[2]['ap_model'], ensure_ascii=False, indent=2)}
 ## Story Background (S-curve Stage 1):
 {json.dumps(ap_model_history[0]['ap_model'], ensure_ascii=False, indent=2)}
-## Story Development (S-curve Stage 2):
-{json.dumps(ap_model_history[1]['ap_model'], ensure_ascii=False, indent=2)}
-Based on the above information, create a story synopsis that includes the main plot, characters, and central conflicts unfolding in the specified setting. The synopsis should be innovative and compelling, following the style of SF novels. The story should focus on the transition from Stage 1 to Stage 2.
+Based on the above information, create a story synopsis that includes the main plot, characters, and central conflicts unfolding in the specified setting. The synopsis should be innovative and compelling, following the style of SF novels.
 """
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}])
     return response.choices[0].message.content
 
-def generate_story(theme: str, outline: str) -> str:
+def generate_story(client, theme: str, outline: str) -> str:
     prompt = f"""
 You are a professional SF writer. Based on the following synopsis, write a short SF novel with the theme "{theme}".
 ## Story Synopsis:
@@ -330,30 +355,7 @@ Write a coherent story following this synopsis. The story should be innovative, 
     response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}])
     return response.choices[0].message.content
 
-# ADDED: Function to generate story summary
-def generate_story_summary(story_text: str, creative_ideas: list) -> str:
-    """Generates a summary of the story, highlighting key creative ideas."""
-    ideas_text = ", ".join(f"'{idea}'" for idea in creative_ideas)
-    prompt = f"""
-Please create a concise summary of the following science fiction story in English, within 10 sentences.
-In the summary, you must identify and emphasize the key creative concepts that were central to the story's development by making them bold (using Markdown's **bold** format).
-
-List of Key Creative Concepts to highlight: {ideas_text}
-
-Full Story Text:
----
-{story_text}
----
-
-Your output should be the English summary only.
-"""
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.choices[0].message.content.strip()
-
-# ========== UI Functions for Visualization (Modified for 2 stages) ==========
+# ========== UI Functions for Visualization ==========
 def show_visualization(ap_history, height=750):
     """Generate and display visualization HTML based on AP model history"""
     if not ap_history:
@@ -396,57 +398,119 @@ def show_visualization(ap_history, height=750):
     st.components.v1.html(html_content, height=height, scrolling=True)
 
 def show_agent_proposals(element_result):
-    """Display multi-agent proposal results nicely (Modified for single iteration)"""
+    """Display multi-agent proposal results nicely"""
     st.markdown(f"#### 🧠 Generation Process for '{element_result['element_type']}'")
     
-    # Single iteration display
-    iteration = element_result['iteration']
-    st.markdown(f"##### Agent Proposals")
+    for iteration in element_result['iterations']:
+        st.markdown(f"---")
+        st.markdown(f"##### Iteration {iteration['iteration_number']}/3")
+        
+        st.markdown("###### 🤖 Proposals from Each Agent")
+        cols = st.columns(len(iteration['all_agent_proposals']))
+        for i, proposal in enumerate(iteration['all_agent_proposals']):
+            with cols[i]:
+                st.markdown(f"**{proposal['agent_name']}**")
+                st.info(proposal['proposal'])
+        
+        st.markdown("###### 🎯 Judgment Result")
+        judgment = iteration['judgment']
+        st.success(f"**Selected Proposal:** {judgment['selected_proposal']}")
+        st.write(f"**Selected Content:** {judgment['selected_content']}")
+        st.write(f"**Selection Reason:** {judgment['selection_reason']}")
     
-    st.markdown("###### 🤖 Proposals from Each Agent")
-    cols = st.columns(len(iteration['all_agent_proposals']))
-    for i, proposal in enumerate(iteration['all_agent_proposals']):
-        with cols[i]:
-            st.markdown(f"**{proposal['agent_name']}**")
-            st.info(proposal['proposal'])
-    
-    st.markdown("###### 🎯 Judgment Result")
-    judgment = iteration['judgment']
-    st.success(f"**Selected Proposal:** {judgment['selected_proposal']}")
-    st.write(f"**Selected Content:** {judgment['selected_content']}")
-    st.write(f"**Selection Reason:** {judgment['selection_reason']}")
+    st.markdown("---")
+    st.markdown("##### 🏆 Final Decision")
+    final_decision = element_result['final_decision']
+    st.success(f"**Finally Selected Content (from Iteration {final_decision['final_selected_iteration']}):**")
+    st.info(f"{final_decision['final_selected_content']}")
+
+# ========== API Key Validation Function ==========
+def validate_openai_key(api_key: str) -> bool:
+    """Validate OpenAI API key by making a simple test call"""
+    try:
+        test_client = OpenAI(api_key=api_key)
+        # Make a minimal test call
+        response = test_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": "Hi"}],
+        )
+        return True
+    except Exception:
+        return False
 
 # ========== Main UI & State Management ==========
-st.title("🚀 Near-Future SF Generator (Demo Version)")
+st.title("🚀 Near-Future SF Generator")
 
 # --- Session State Initialization ---
 if 'process_started' not in st.session_state:
     st.session_state.process_started = False
     st.session_state.topic = ""
     st.session_state.scene = ""
+    st.session_state.user_api_key = ""
     st.session_state.ap_history = []
     st.session_state.descriptions = []
     st.session_state.story = ""
-    st.session_state.story_summary = "" # ADDED: Initialize story_summary
     st.session_state.agents = []
-    st.session_state.stage_elements_results = {'stage2': []}
+    st.session_state.stage_elements_results = {'stage2': [], 'stage3': []}
+    st.session_state.client = None
+    st.session_state.tavily_client = None
 
 # --- STEP 0: Initial Input Screen ---
 if not st.session_state.process_started:
-    st.markdown("Enter the **theme** you want to explore and the **setting** for the story. AI will predict the future in 2 stages and automatically generate an SF novel to completion.")
+    st.markdown("Enter your **OpenAI API key**, the **theme** you want to explore and the **setting** for the story. AI will predict the future in 3 stages and automatically generate an SF novel to completion.")
+    
+    # API Key input
+    st.markdown("### 🔑 API Configuration")
+    api_key_input = st.text_input(
+        "Enter your OpenAI API Key", 
+        type="password",
+        placeholder="sk-...",
+        help="Your API key will be used for all AI generation. It's not stored permanently."
+    )
+    
+    # Validate API key if provided
+    key_valid = False
+    if api_key_input:
+        with st.spinner("Validating API key..."):
+            key_valid = validate_openai_key(api_key_input)
+        if key_valid:
+            st.success("✅ API key is valid!")
+        else:
+            st.error("❌ Invalid API key. Please check and try again.")
     
     st.markdown("### 📝 Content Configuration")
     topic_input = st.text_input("Enter the theme you want to explore", placeholder="e.g., AI, autonomous driving, quantum computing")
     scene_input = st.text_area("Describe the story scenario in detail", placeholder="e.g., A futuristic city at sunset, a quantum research lab")
 
-    if st.button("Start AP & Story Generation →", type="primary", disabled=not topic_input or not scene_input):
-        st.session_state.topic = topic_input
-        st.session_state.scene = scene_input
-        st.session_state.process_started = True
-        st.rerun()
+    # Check if all inputs are valid
+    all_inputs_valid = api_key_input and key_valid and topic_input and scene_input
+    
+    if st.button("Start AP & Story Generation →", type="primary", disabled=not all_inputs_valid):
+        # Initialize clients with user's API key
+        client, tavily_client, error = initialize_clients(api_key_input)
+        
+        if error:
+            st.error(f"❌ Failed to initialize clients: {error}")
+        else:
+            st.session_state.topic = topic_input
+            st.session_state.scene = scene_input
+            st.session_state.user_api_key = api_key_input
+            st.session_state.client = client
+            st.session_state.tavily_client = tavily_client
+            st.session_state.process_started = True
+            st.rerun()
 
 # --- Fully Automated Execution Process ---
 else:
+    # Ensure clients are initialized
+    if not st.session_state.client or not st.session_state.tavily_client:
+        client, tavily_client, error = initialize_clients(st.session_state.user_api_key)
+        if error:
+            st.error(f"❌ Client initialization error: {error}")
+            st.stop()
+        st.session_state.client = client
+        st.session_state.tavily_client = tavily_client
+    
     st.header(f"Theme: {st.session_state.topic}")
     user_vision = f"Imagine the future development of '{st.session_state.topic}' through technological evolution."
 
@@ -480,6 +544,17 @@ else:
 
     if len(st.session_state.ap_history) >= 2:
         st.info(st.session_state.descriptions[1])
+        show_visualization(st.session_state.ap_history[0:2])
+
+    # --- Stage 3 Display ---
+    if st.session_state.stage_elements_results['stage3']:
+        st.markdown("---")
+        st.header("Stage 3: Maturity Period (Maturity Prediction)")
+        for result in st.session_state.stage_elements_results['stage3']:
+            show_agent_proposals(result)
+            
+    if len(st.session_state.ap_history) >= 3:
+        st.info(st.session_state.descriptions[2])
         show_visualization(st.session_state.ap_history)
 
     # --- Story Display ---
@@ -490,12 +565,8 @@ else:
         st.markdown("### 📚 Generated SF Short Story")
         st.text_area("SF Story", st.session_state.story, height=400)
         
-        # ADDED: Display for Story Summary
-        st.markdown("### 📖 Story Summary")
-        st.markdown(st.session_state.story_summary)
-
-        with st.expander("📈 View Summary of 2-Stage Future Predictions"):
-            stages_info = ["Stage 1: Ferment Period", "Stage 2: Take-off Period"]
+        with st.expander("📈 View Summary of 3-Stage Future Predictions"):
+            stages_info = ["Stage 1: Ferment Period", "Stage 2: Take-off Period", "Stage 3: Maturity Period"]
             for i, stage_name in enumerate(stages_info):
                 st.markdown(f"**{stage_name}**")
                 st.info(st.session_state.descriptions[i])
@@ -506,7 +577,7 @@ else:
     # --- Stage 1 Generation ---
     if len(st.session_state.ap_history) == 0:
         with st.status("Stage 1: Building AP model with web information collection via Tavily...", expanded=True) as status:
-            intro1, model1 = build_stage1_ap_with_tavily(st.session_state.topic, status)
+            intro1, model1 = build_stage1_ap_with_tavily(st.session_state.client, st.session_state.tavily_client, st.session_state.topic, status)
             st.session_state.descriptions.append(intro1)
             st.session_state.ap_history.append({"stage": 1, "ap_model": model1})
         st.rerun()
@@ -516,7 +587,7 @@ else:
         # Agent Generation
         if not st.session_state.agents:
             with st.spinner("Generating expert AI agents for analysis..."):
-                st.session_state.agents = generate_agents(st.session_state.topic)
+                st.session_state.agents = generate_agents(st.session_state.client, st.session_state.topic)
             st.rerun()
         
         # Element Generation
@@ -527,7 +598,7 @@ else:
             with st.status(f"Stage 2: Generating '{elem_type}'...", expanded=True) as status:
                 # Pass previous element results as context
                 context = {r['element_type']: r['final_decision']['final_selected_content'] for r in s2_results}
-                result = generate_single_element_with_iterations(status, st.session_state.topic, elem_type, st.session_state.ap_history[0]['ap_model'], st.session_state.agents, user_vision, context)
+                result = generate_single_element_with_iterations(st.session_state.client, status, st.session_state.topic, elem_type, st.session_state.ap_history[0]['ap_model'], st.session_state.agents, user_vision, context)
                 s2_results.append(result)
             st.rerun()
 
@@ -536,31 +607,40 @@ else:
             with st.status("Stage 2: Building complete AP model...", expanded=True) as status:
                 context = {r['element_type']: r['final_decision']['final_selected_content'] for r in s2_results}
                 status.update(label="Stage 2: Building complete AP model...")
-                model2 = build_complete_ap_model(st.session_state.topic, st.session_state.ap_history[0]['ap_model'], context, 2, user_vision)
+                model2 = build_complete_ap_model(st.session_state.client, st.session_state.topic, st.session_state.ap_history[0]['ap_model'], context, 2, user_vision)
                 status.update(label="Stage 2: Generating introduction...")
-                intro2 = generate_stage_introduction(st.session_state.topic, 2, context, user_vision)
+                intro2 = generate_stage_introduction(st.session_state.client, st.session_state.topic, 2, context, user_vision)
                 st.session_state.descriptions.append(intro2)
                 st.session_state.ap_history.append({"stage": 2, "ap_model": model2})
             st.rerun()
 
-    # --- Story Generation ---
-    elif len(st.session_state.ap_history) == 2 and not st.session_state.story:
-        with st.spinner("Final stage: Generating SF story synopsis..."):
-            outline = generate_outline(st.session_state.topic, st.session_state.scene, st.session_state.ap_history)
-        with st.spinner("Final stage: Generating SF short story from synopsis..."):
-            story = generate_story(st.session_state.topic, outline)
-            st.session_state.story = story
-        
-        # ADDED: Generate summary after story is created
-        with st.spinner("Final stage: Generating story summary..."):
-            # Collect creative ideas from stage 2
-            creative_ideas = [
-                r['final_decision']['final_selected_content']
-                for r in st.session_state.stage_elements_results['stage2']
-            ]
-            summary = generate_story_summary(st.session_state.story, creative_ideas)
-            st.session_state.story_summary = summary
+    # --- Stage 3 Generation (Step by Step) ---
+    elif len(st.session_state.ap_history) == 2:
+        s3_results = st.session_state.stage_elements_results['stage3']
+        element_sequence = ["Technology and Resources", "Daily Spaces and User Experience", "Avant-garde Social Issues"]
+        if len(s3_results) < len(element_sequence):
+            elem_type = element_sequence[len(s3_results)]
+            with st.status(f"Stage 3: Generating '{elem_type}'...", expanded=True) as status:
+                context = {r['element_type']: r['final_decision']['final_selected_content'] for r in s3_results}
+                result = generate_single_element_with_iterations(st.session_state.client, status, st.session_state.topic, elem_type, st.session_state.ap_history[1]['ap_model'], st.session_state.agents, user_vision, context)
+                s3_results.append(result)
+            st.rerun()
+        else:
+            with st.status("Stage 3: Building complete AP model...", expanded=True) as status:
+                context2 = {r['element_type']: r['final_decision']['final_selected_content'] for r in s3_results}
+                model3 = build_complete_ap_model(st.session_state.client, st.session_state.topic, st.session_state.ap_history[1]['ap_model'], context2, 3, user_vision)
+                intro3 = generate_stage_introduction(st.session_state.client, st.session_state.topic, 3, context2, user_vision)
+                st.session_state.descriptions.append(intro3)
+                st.session_state.ap_history.append({"stage": 3, "ap_model": model3})
+            st.rerun()
 
+    # --- Story Generation ---
+    elif len(st.session_state.ap_history) == 3 and not st.session_state.story:
+        with st.spinner("Final stage: Generating SF story synopsis..."):
+            outline = generate_outline(st.session_state.client, st.session_state.topic, st.session_state.scene, st.session_state.ap_history)
+        with st.spinner("Final stage: Generating SF short story from synopsis..."):
+            story = generate_story(st.session_state.client, st.session_state.topic, outline)
+            st.session_state.story = story
         st.success("✅ All generation processes completed!")
         time.sleep(1)
         st.rerun()
