@@ -1,7 +1,7 @@
 # 🚀 Near-Future SF Generator
 
-**Streamlit-based application** that generates **3-stage development timelines** and **SF short stories** based on real-world products and user experiences, using the **S-curve model** and **Archaeological Prototyping (AP) model**.\n
-Related paper already accepted in ICCE GCCE 2025: **AP-Based LLM Story Generation: Envision Technology Development Through Science Fiction**
+**Streamlit-based application** that generates **3-stage development timelines** and **SF short stories** based on real-world products and user experiences, using the **S-curve model** and **Archaeological Prototyping (AP) model**.
+- Related paper already accepted in ICCE GCCE 2025: **AP-Based LLM Story Generation: Envision Technology Development Through Science Fiction**
 
 ## ✨ New Features (Enhanced Version)
 
